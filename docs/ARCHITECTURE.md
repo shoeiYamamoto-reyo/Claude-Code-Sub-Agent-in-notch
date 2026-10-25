@@ -11,7 +11,7 @@
 NotchAgent.app ◀────┤                                                   Claude Code
  ├─ ProjectRegistry … 登録プロジェクトと環境設定                            │
  ├─ TaskRunner      … タスクの起動・停止・出力の読み取り                     │ hook: stdin JSON
- ├─ HookServer      … ソケット受信・応答 ◀── Unix ソケット ── notch-hook（中継 CLI）
+ ├─ HookCenter      … ソケット受信（AgentKit の HookSocketServer）◀── Unix ソケット ── notch-hook（中継 CLI）
  ├─ SessionStore    … セッション／サブエージェントの状態（hook と TaskRunner の両方から）
  ├─ ApprovalQueue   … 承認待ちキュー
  ├─ AgentCatalog    … .claude/agents の読み書き
@@ -27,6 +27,9 @@ NotchAgent.app ◀────┤                                               
   - ホバー検知はマウス移動のイベント（グローバル／ローカルのモニタとトラッキング領域）を 15 Hz 以下に間引いて処理する。展開 0.12 秒・縮小 0.6 秒の遅延はワンショットの待ちだけで、常時動くタイマーは持たない。
 - **キャラクター**: SwiftUI の `Canvas` + `TimelineView(.periodic)` で描く（画像アセットなし）。姿勢・まばたきは時刻の関数（`AgentKit` の `CharacterAnimation`）にし、描き直す頻度は状態ごとに決める（待機中 12 fps、作業中・承認待ち・完了 30 fps、エラーは静止）。目の追従はカーソル位置を 15 Hz 以下で取得し、目標が 0.25（viewBox 単位）以上変わったときだけ、今の位置から 0.15 秒かけて補間する（補間中だけ 60 fps、`EyeMotion`）。「視差効果を減らす」がオンなら動きと追従を止める。
 - **TaskRunner**: プロジェクトの作業フォルダで `claude -p ... --output-format stream-json --verbose --session-id <UUID>` を子プロセスとして起動し、stream-json の出力を読んで `SessionStore` に流す。`--session-id` をアプリが決めるので、同じセッションの hook イベントと確実に結び付く。停止は SIGINT → SIGTERM。詳細は [ADR-0002](adr/0002-task-launch.md)。
+- **hook の受信（M1 で実装）**: 受信そのもの（`HookSocketServer`）は POSIX ソケットと Dispatch だけで書けるので `AgentKit` に置き、Linux でも中継 CLI との結合テストを行う。アプリの `HookCenter` は、受け取った 1 行を MainActor で `SessionStore` に反映し、表示（セッション一覧・キャラクターの表情・承認待ちの peek）を更新する。時間で変わるもの（停止扱い、完了の表情を戻す）は次に起きる時刻にワンショットで起きるだけ。
+- **SessionStore（M1 で実装）**: 値型。イベントと時刻を受けて状態を変える（`apply(_:environment:at:)`、`expire(now:)`）。状態は 入力待ち／実行中／承認待ち／完了／エラー／停止。作業中のまま 30 分音沙汰が無ければ「停止」、12 時間で一覧から消す（coucou と同じ閾値）。サブエージェントは `agent_id` 単位でセッションの下に平らに並べる（入れ子の親子は hook からは分からない）。
+- **hooks のインストール（M1 で実装）**: `HookInstaller`（JSON の変換）と `SafeFileWriter`（バックアップ・競合検出・リンク先への書き込み・パーミッション保持）、`OrderedJSON`（キーの順番と数値の表記を保つ）、`LineDiff`（確認画面の差分）。アプリの `HookSetup` が差分を見せ、ユーザーが押したときだけ書く。
 - **セッションとサブエージェントの識別**: hook の `session_id` でセッション、`agent_id` / `agent_type` が付いていればサブエージェント内のイベント。`SubagentStart` / `SubagentStop` で開始・終了（`docs/claude-code-spec.md` 3 章）。`SessionEnd` が来ないことがあるため、一定時間イベントの無いセッションは「停止」扱いにする（F3-5）。
 
 ## モジュール構成
@@ -35,7 +38,7 @@ NotchAgent.app ◀────┤                                               
 | --- | --- | --- | --- |
 | `AgentKit` | Swift Package (library) | hook イベントと stream-json のモデルとデコード、セッション状態の集約、承認キュー、プロジェクト設定、タスク起動コマンドの組み立て、エージェント定義（frontmatter）のパース／生成、settings.json の安全なマージ、ソケットのワイヤプロトコルと Claude Code 向け出力への変換、ノッチの寸法計算と表示の状態機械 | ✅ |
 | `notch-hook` | Swift Package (executable) | 中継 CLI。`AgentKit` のプロトコル定義を使う | ✅（ソケット部分含む） |
-| `NotchAgent` | Xcode アプリ（XcodeGen） | AppKit / SwiftUI の UI、キャラクター描画、ソケットサーバー、子プロセス管理、ファイル監視、Keychain | ❌（macOS のみ） |
+| `NotchAgent` | Xcode アプリ（XcodeGen） | AppKit / SwiftUI の UI、キャラクター描画、受信とセッション表示のつなぎ込み、hooks インストールの確認画面、子プロセス管理、ファイル監視、Keychain。`notch-hook` を `Contents/MacOS/` に同梱 | ❌（macOS のみ） |
 
 ディレクトリ（M0-4 で作成）:
 ```
@@ -73,9 +76,12 @@ public struct HookEvent: Sendable, Decodable {
     public let raw: JSONValue                // 受け取った JSON 全体（未知フィールドも保持）
 }
 
-public protocol SessionStore: Sendable {
-    func apply(_ event: HookEvent) async
-    func snapshot() async -> [Session]
+// M1 で値型として実装（Sources/AgentKit/Sessions/SessionStore.swift）。
+public struct SessionStore: Sendable, Equatable {
+    public mutating func apply(_ event: HookEvent, environment: HookWireMessage.Environment?, at now: Date)
+    public mutating func expire(now: Date) -> Bool
+    public var sessions: [Session] { get }
+    public func mood(now: Date) -> CharacterMood
 }
 
 public enum ApprovalDecision: Sendable { case allow, deny(reason: String?) }

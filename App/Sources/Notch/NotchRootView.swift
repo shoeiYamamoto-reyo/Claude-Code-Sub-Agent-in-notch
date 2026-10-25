@@ -18,7 +18,7 @@ struct NotchRootView: View {
                 .fill(.black)
                 .frame(width: size.width, height: size.height)
                 .overlay(alignment: .top) {
-                    IslandContent(state: state, noticeText: model.noticeText, barHeight: layout.barHeight)
+                    IslandContent(model: model, state: state, barHeight: layout.barHeight)
                         .frame(width: size.width, height: size.height, alignment: .top)
                         .clipped()
                 }
@@ -43,8 +43,8 @@ struct NotchRootView: View {
 
 /// 島の中身。キャラクターの行（ノッチの高さ）より下に置く。
 private struct IslandContent: View {
+    let model: NotchModel
     let state: NotchPresentationState
-    let noticeText: String?
     let barHeight: CGFloat
 
     var body: some View {
@@ -53,22 +53,23 @@ private struct IslandContent: View {
             case .character:
                 EmptyView()
             case .peek:
-                Text(noticeText ?? "")
+                Text(model.noticeText ?? "")
                     .font(.callout)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
                     .transition(.opacity)
             case .expanded:
-                Text("Notch Agent")
-                    .font(.headline)
-                if let noticeText {
+                if let noticeText = model.noticeText {
                     Label(noticeText, systemImage: "bell")
                         .font(.callout)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
                 }
-                Text("セッション一覧・承認・タスク投入はこれから追加します（M1-6 以降）。")
-                    .font(.callout)
-                    .foregroundStyle(.white.opacity(0.6))
-                Spacer(minLength: 0)
+                SessionListView(
+                    sessions: model.sessions,
+                    receiver: model.receiver,
+                    installStatus: model.hookInstallStatus
+                )
             }
         }
         .foregroundStyle(.white)

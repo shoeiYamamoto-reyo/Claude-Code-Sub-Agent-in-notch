@@ -51,6 +51,13 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             build
+      - name: Check bundled notch-hook
+        run: |
+          HOOK=build/Build/Products/Debug/NotchAgent.app/Contents/MacOS/notch-hook
+          test -x "$HOOK"
+          # アプリが起動していなくても、何も出力せず exit 0 で終わること（ADR-0001）。
+          OUT=$(echo '{"session_id":"ci","hook_event_name":"Stop"}' | NOTCH_AGENT_SOCKET=/tmp/none.sock "$HOOK")
+          test -z "$OUT"
       # Xcode の無い Mac でも試せるように、ビルドしたアプリを Artifacts に置く。
       # Apple Silicon では署名の無いアプリは起動できないので、アドホック署名（証明書なし）を付ける。
       - name: Package app

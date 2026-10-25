@@ -31,6 +31,7 @@
   | `SessionStart`, `SessionEnd`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SubagentStart`, `SubagentStop` | なし | 5 | 送信だけして即終了 |
   | `PermissionRequest` | `--wait` | 120 | 応答を待ち、決定を stdout に出す |
   | `PreToolUse`（matcher `AskUserQuestion`） | `--ask` | 130 | 回答を待ち、`updatedInput` を出す |
+- **M1 時点の登録**: 上の表の送信だけのイベントに加え、`PermissionRequest` も**送信だけ**（`--wait` なし、timeout 5）で登録する。承認待ちの表示に使い、何も出力しないので判断は Claude Code の通常の確認に任せる。M2-1 で `--wait`（timeout 120）に、M2-3 で `--ask` を追加する（インストーラは古い自分のエントリを外してから入れ直すので、再インストールで移行できる）。
 - 守ること:
   - ソケットへの接続タイムアウトは 300 ms。接続できない・応答が無い・壊れた応答のときは**何も出力せず exit 0**。
   - 終了コードは常に 0（exit 2 は使わない）。stdout には Claude Code 向けの JSON 1 つだけを出す。
@@ -40,6 +41,7 @@
 
 ### ソケットとワイヤプロトコル
 - パス: `~/Library/Application Support/NotchAgent/notch.sock`（`sun_path` の 104 バイト制限に収まることを起動時に確認）。ディレクトリは 0700。
+- 開発・テスト用に、環境変数 `NOTCH_AGENT_SOCKET` でソケットのパスを差し替えられる。
 - 形式: 改行区切りの JSON 1 行ずつ。中継 → アプリ:
   ```json
   {"v":1,"mode":"event|wait|ask","env":{"term_program":"...","bundle_id":"..."},"hook":{ ...Claude Code から受け取った JSON そのまま... }}

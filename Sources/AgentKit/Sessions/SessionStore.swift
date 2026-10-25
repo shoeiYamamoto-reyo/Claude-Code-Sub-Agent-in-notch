@@ -79,8 +79,10 @@ public struct SessionStore: Sendable, Equatable {
             appendTool(tool, to: &session)
             if let agentID = event.agentID {
                 updateSubagent(id: agentID, in: &session) { $0.currentTool = tool }
-            } else if session.status != .waitingForApproval {
-                session.status = .working
+            } else {
+                // 本体が次のツールに進んだ = 前の承認待ちは（ターミナルでの拒否などで）片付いた。
+                if session.pendingPermission?.agentID == nil { session.pendingPermission = nil }
+                if session.pendingPermission == nil { session.status = .working }
             }
 
         case .permissionRequest:
@@ -117,7 +119,10 @@ public struct SessionStore: Sendable, Equatable {
             case "permission_prompt":
                 if session.status == .working { session.status = .waitingForApproval }
             case "idle_prompt":
-                if session.status == .working || session.status == .stalled { session.status = .waitingForInput }
+                if [.working, .waitingForApproval, .stalled].contains(session.status) {
+                    session.status = .waitingForInput
+                    session.pendingPermission = nil
+                }
             default:
                 break
             }

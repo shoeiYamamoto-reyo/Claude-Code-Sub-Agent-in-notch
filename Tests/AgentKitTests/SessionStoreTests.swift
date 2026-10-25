@@ -141,6 +141,25 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(session?.status, .done)
     }
 
+    func testDenialInTerminalIsClearedByNextStep() {
+        var store = SessionStore()
+        store.apply(event("PreToolUse", ["tool_name": .string("Bash"), "tool_use_id": .string("t1")]), at: t0)
+        store.apply(event("PermissionRequest", ["tool_name": .string("Bash")]), at: t0 + 1)
+        // サブエージェントのツールでは本体の承認待ちは消えない。
+        store.apply(event("PreToolUse", ["agent_id": .string("a1"), "tool_name": .string("Read")]), at: t0 + 2)
+        XCTAssertEqual(store.session(id: "s1")?.status, .waitingForApproval)
+        // 本体が次のツールに進んだら片付いたとみなす。
+        store.apply(event("PreToolUse", ["tool_name": .string("Read"), "tool_use_id": .string("t2")]), at: t0 + 3)
+        XCTAssertEqual(store.session(id: "s1")?.status, .working)
+        XCTAssertNil(store.session(id: "s1")?.pendingPermission)
+
+        // 拒否して放置 → idle_prompt で入力待ちへ。
+        store.apply(event("PermissionRequest", ["tool_name": .string("Bash")]), at: t0 + 4)
+        store.apply(event("Notification", ["notification_type": .string("idle_prompt")]), at: t0 + 64)
+        XCTAssertEqual(store.session(id: "s1")?.status, .waitingForInput)
+        XCTAssertNil(store.session(id: "s1")?.pendingPermission)
+    }
+
     func testStopFailureShowsError() {
         var store = SessionStore()
         store.apply(event("UserPromptSubmit"), at: t0)

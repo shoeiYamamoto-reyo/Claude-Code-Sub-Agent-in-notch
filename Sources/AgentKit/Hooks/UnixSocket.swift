@@ -59,6 +59,15 @@ enum UnixSocket {
         #endif
     }
 
+    /// `send(2)`。`UnixSocketClient.send` と名前がぶつかるので包む。
+    static func write(_ fd: Int32, _ pointer: UnsafeRawPointer, _ count: Int) -> Int {
+        #if canImport(Darwin)
+        Darwin.send(fd, pointer, count, sendFlags)
+        #else
+        Glibc.send(fd, pointer, count, sendFlags)
+        #endif
+    }
+
     /// fd が書き込み可能になるまで最大 `milliseconds` 待つ。
     static func waitWritable(_ fd: Int32, milliseconds: Int) -> Bool {
         guard milliseconds > 0 else { return false }
@@ -103,7 +112,7 @@ public enum UnixSocketClient {
             guard let base = buffer.baseAddress else { return true }
             var offset = 0
             while offset < buffer.count {
-                let written = Foundation.send(fd, base + offset, buffer.count - offset, UnixSocket.sendFlags)
+                let written = UnixSocket.write(fd, base + offset, buffer.count - offset)
                 if written > 0 {
                     offset += written
                 } else if written < 0 && errno == EINTR {
