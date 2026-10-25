@@ -1,4 +1,8 @@
 import Foundation
+#if canImport(CoreGraphics)
+// macOS では CGRect の minX や init(x:y:width:height:) などが CoreGraphics 側にある。
+import CoreGraphics
+#endif
 
 /// キャラクターの状態（F0-3）。表情は目の形だけで表す。
 public enum CharacterMood: String, Sendable, Equatable, CaseIterable, Codable {

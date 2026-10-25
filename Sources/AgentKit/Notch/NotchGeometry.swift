@@ -1,4 +1,8 @@
 import Foundation
+#if canImport(CoreGraphics)
+// macOS では CGRect の minX や init(x:y:width:height:) などが CoreGraphics 側にある。
+import CoreGraphics
+#endif
 
 /// 1 枚の画面について、ノッチの位置計算に必要な値。アプリ側で `NSScreen` から作る。
 /// 座標は AppKit のグローバル座標（原点は主画面の左下、y は上向き）。

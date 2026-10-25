@@ -1,4 +1,8 @@
 import Foundation
+#if canImport(CoreGraphics)
+// macOS では CGRect の minX や init(x:y:width:height:) などが CoreGraphics 側にある。
+import CoreGraphics
+#endif
 import XCTest
 @testable import AgentKit
 

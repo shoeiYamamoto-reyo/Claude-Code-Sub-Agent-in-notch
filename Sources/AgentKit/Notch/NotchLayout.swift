@@ -1,4 +1,8 @@
 import Foundation
+#if canImport(CoreGraphics)
+// macOS では CGRect の minX や init(x:y:width:height:) などが CoreGraphics 側にある。
+import CoreGraphics
+#endif
 
 /// ノッチ周りの寸法。島（ノッチから広がる黒い領域）とキャラクターとパネルの位置を決める。
 ///
