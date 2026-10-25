@@ -24,8 +24,8 @@
 ## M1. 常駐と監視
 | # | タスク | 担当 | 完了条件 | テスト方法 |
 | --- | --- | --- | --- | --- |
-| 1-1 | ☐ ノッチパネル: NSPanel の配置（ノッチ有無・複数ディスプレイ）、`character / peek / expanded` の状態機械、ホバーで展開・離れて縮む、非展開時はクリック透過 | swift-macos-engineer | ノッチ有り・無しの両方で正しい位置に出る | 状態機械は `swift test`、表示は手動 |
-| 1-2 | ☐ キャラクター: `docs/design/character.md` のとおり `Canvas` で描画、5 状態の表情、マウス追従、待機中の低頻度アニメーション | swift-macos-engineer | 待機中 CPU ほぼ 0 %（アクティビティモニタで確認） | 手動 |
+| 1-1 | ☑ ノッチパネル: NSPanel の配置（ノッチ有無・複数ディスプレイ）、`character / peek / expanded` の状態機械、ホバーで展開・離れて縮む、非展開時はクリック透過 | swift-macos-engineer | ノッチ有り・無しの両方で正しい位置に出る | 状態機械は `swift test`、表示は手動 |
+| 1-2 | ☑ キャラクター: `docs/design/character.md` のとおり `Canvas` で描画、5 状態の表情、マウス追従、待機中の低頻度アニメーション | swift-macos-engineer | 待機中 CPU ほぼ 0 %（アクティビティモニタで確認） | 手動 |
 | 1-3 | ☐ `HookEvent` モデルとデコード（未知イベントも落ちない） | swift-macos-engineer | 実ペイロードのフィクスチャをすべてデコードできる | `swift test` |
 | 1-4 | ☐ `notch-hook` 中継 CLI（送信のみ、アプリ不在で即終了） | swift-macos-engineer | ソケット不在時に 100 ms 以内で exit 0 | `swift test`（タイムアウト試験） |
 | 1-5 | ☐ `SessionStore`（セッション／サブエージェントの状態集約、停止判定） | swift-macos-engineer | イベント列 → 期待状態のテーブルテストが通る | `swift test` |

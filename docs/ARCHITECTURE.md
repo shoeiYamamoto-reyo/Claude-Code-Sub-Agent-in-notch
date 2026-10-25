@@ -23,7 +23,9 @@ NotchAgent.app ◀────┤                                               
   - `character`: キャラクターだけ表示。パネルはマウスを透過し、ホバー検知用の小さな領域だけ受ける。
   - `peek`: 承認待ちなどを知らせる小さな吹き出し。
   - `expanded`: ホバー中。プロジェクト、タスク投入、監視、承認、定義管理のタブ。
-- **キャラクター**: SwiftUI の `Canvas` + `TimelineView` で描く（画像アセットなし）。表情は状態（`idle / working / waiting / done / error`）の関数にし、待機中はアニメーション頻度を下げて CPU を使わない。
+  - 寸法と状態機械は `AgentKit`（`NotchGeometry` / `NotchLayout` / `NotchPresentationMachine`）。島（黒い領域）はノッチの中心から左右対称に広がり、キャラクターはノッチの左の「翼」に置く（ノッチの中には画素が無いため）。ノッチの無い画面では上部中央の小さな島の真ん中に置く。キャラクターは展開しても動かない。
+  - ホバー検知はマウス移動のイベント（グローバル／ローカルのモニタとトラッキング領域）を 15 Hz 以下に間引いて処理する。展開 0.12 秒・縮小 0.6 秒の遅延はワンショットの待ちだけで、常時動くタイマーは持たない。
+- **キャラクター**: SwiftUI の `Canvas` + `TimelineView(.periodic)` で描く（画像アセットなし）。姿勢・まばたきは時刻の関数（`AgentKit` の `CharacterAnimation`）にし、描き直す頻度は状態ごとに決める（待機中 12 fps、作業中・承認待ち・完了 30 fps、エラーは静止）。目の追従は移動量が 0.25（viewBox 単位）以上変わったときだけ描き直す。「視差効果を減らす」がオンなら動きと追従を止める。
 - **TaskRunner**: プロジェクトの作業フォルダで `claude -p ... --output-format stream-json --verbose --session-id <UUID>` を子プロセスとして起動し、stream-json の出力を読んで `SessionStore` に流す。`--session-id` をアプリが決めるので、同じセッションの hook イベントと確実に結び付く。停止は SIGINT → SIGTERM。詳細は [ADR-0002](adr/0002-task-launch.md)。
 - **セッションとサブエージェントの識別**: hook の `session_id` でセッション、`agent_id` / `agent_type` が付いていればサブエージェント内のイベント。`SubagentStart` / `SubagentStop` で開始・終了（`docs/claude-code-spec.md` 3 章）。`SessionEnd` が来ないことがあるため、一定時間イベントの無いセッションは「停止」扱いにする（F3-5）。
 
