@@ -1,3 +1,5 @@
+import Foundation
+
 /// notch-hook とアプリの間で共有する定数（ADR-0001）。
 public enum HookBridge {
     /// ワイヤプロトコルのバージョン。中継 → アプリのメッセージの `v`。
@@ -34,6 +36,21 @@ public enum HookBridge {
     public static func socketPath(home: String) -> String {
         let base = home.hasSuffix("/") ? String(home.dropLast()) : home
         return "\(base)/Library/Application Support/\(supportDirectoryName)/\(socketFileName)"
+    }
+
+    /// settings.json に登録する中継 CLI のパス。アプリを移動しても変わらないように、アプリの外にコピーして使う。
+    public static func hookExecutablePath(home: String) -> String {
+        let base = home.hasSuffix("/") ? String(home.dropLast()) : home
+        return "\(base)/Library/Application Support/\(supportDirectoryName)/bin/\(HookInstaller.executableName)"
+    }
+
+    /// hooks を登録するユーザー設定ファイル。`CLAUDE_CONFIG_DIR` があればその下（docs: Sessions）。
+    public static func userSettingsPath(home: String, environment: [String: String]) -> String {
+        if let configDirectory = environment["CLAUDE_CONFIG_DIR"], !configDirectory.isEmpty {
+            return (configDirectory as NSString).appendingPathComponent("settings.json")
+        }
+        let base = home.hasSuffix("/") ? String(home.dropLast()) : home
+        return "\(base)/.claude/settings.json"
     }
 
     /// パスが `sun_path` に収まるか。収まらない場合、アプリはソケットを作らない。
