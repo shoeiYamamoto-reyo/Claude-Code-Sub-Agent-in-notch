@@ -8,6 +8,8 @@ import SwiftUI
 /// - マウスの位置はイベント（グローバル／ローカルのモニタとトラッキング領域）で受け、15 Hz 以下に間引く。
 ///   マウスが止まっていれば何もしない。
 /// - 展開・縮小の遅延は、状態機械が返す時刻にワンショットで起きるだけ。
+///
+/// 表示状態とキャラクターの状態が変わったときの効果音もここで鳴らす（docs/design/sound.md）。
 @MainActor
 final class NotchPanelController {
     private static let displayChoiceKey = "displayChoice"
@@ -15,6 +17,7 @@ final class NotchPanelController {
     private static let pointerInterval: Duration = .milliseconds(66)
 
     let model: NotchModel
+    let sound = SoundPlayer()
     private let panel = NotchPanel.make()
     private let pointerTracker = PointerTracker()
     private var machine = NotchPresentationMachine()
@@ -79,6 +82,9 @@ final class NotchPanelController {
     // MARK: - 外からの操作
 
     func setMood(_ mood: CharacterMood) {
+        if let cue = SoundCue.forMoodChange(from: model.mood, to: mood) {
+            sound.play(cue)
+        }
         model.mood = mood
         processPointer()
     }
@@ -160,6 +166,9 @@ final class NotchPanelController {
 
     private func applyMachine() {
         if model.presentation != machine.state {
+            if let cue = SoundCue.forPresentationChange(from: model.presentation, to: machine.state) {
+                sound.play(cue)
+            }
             model.presentation = machine.state
         }
         if let layout = model.layout {
