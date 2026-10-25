@@ -27,7 +27,8 @@ final class NotchPanelController {
     private var pointerTask: Task<Void, Never>?
     private var lastPointerUpdate = ContinuousClock.now - .seconds(1)
     /// 承認・質問の音を鳴らした直後は、お知らせ（peek）が出ても `notice` を重ねて鳴らさない。
-    private var suppressNoticeSound = false
+    /// この時刻までは peek の `notice` を鳴らさない（`playAlert` で代わりの音を鳴らした直後）。
+    private var noticeSoundSuppressedUntil: Date?
 
     init(model: NotchModel) {
         self.model = model
@@ -94,7 +95,8 @@ final class NotchPanelController {
     /// 承認待ち・質問などの知らせの音を鳴らす（docs/design/sound.md: peek の `notice` の代わりに鳴らす）。
     func playAlert(_ cue: SoundCue) {
         sound.play(cue)
-        suppressNoticeSound = true
+        // 続く setMood / setNotice のどこで peek に切り替わっても、notice が重ならないようにする。
+        noticeSoundSuppressedUntil = .now + 1
     }
 
     func setNotice(_ text: String?) {
@@ -175,12 +177,11 @@ final class NotchPanelController {
     private func applyMachine() {
         if model.presentation != machine.state {
             if let cue = SoundCue.forPresentationChange(from: model.presentation, to: machine.state),
-               !(cue == .notice && suppressNoticeSound) {
+               !(cue == .notice && (noticeSoundSuppressedUntil.map { $0 > .now } ?? false)) {
                 sound.play(cue)
             }
             model.presentation = machine.state
         }
-        suppressNoticeSound = false
         if let layout = model.layout {
             let hovering = layout.hoverFrame(for: machine.state).contains(NSEvent.mouseLocation)
             panel.ignoresMouseEvents = !hovering
