@@ -128,3 +128,30 @@ final class CharacterSpecTests: XCTestCase {
         XCTAssertEqual(CharacterSpec.eyesMidpoint, CGPoint(x: 70, y: 56))
     }
 }
+
+final class EyeMotionTests: XCTestCase {
+    func testRestingNeverMoves() {
+        let motion = EyeMotion.resting(at: EyeOffset(dx: 2, dy: 3))
+        XCTAssertEqual(motion.offset(at: 0), EyeOffset(dx: 2, dy: 3))
+        XCTAssertFalse(motion.isMoving(at: 0))
+    }
+
+    func testEasesTowardTargetAndArrives() {
+        let motion = EyeMotion(from: .zero, to: EyeOffset(dx: 10, dy: 0), startTime: 100)
+        XCTAssertEqual(motion.offset(at: 100), .zero)
+        let middle = motion.offset(at: 100 + EyeMotion.duration / 2)
+        XCTAssertGreaterThan(middle.dx, 5)  // ease-out なので半分の時間で半分より進む
+        XCTAssertLessThan(middle.dx, 10)
+        XCTAssertEqual(motion.offset(at: 100 + EyeMotion.duration), EyeOffset(dx: 10, dy: 0))
+        XCTAssertTrue(motion.isMoving(at: 100.05))
+        XCTAssertFalse(motion.isMoving(at: 100 + EyeMotion.duration))
+    }
+
+    func testRetargetStartsFromCurrentPosition() {
+        let motion = EyeMotion(from: .zero, to: EyeOffset(dx: 10, dy: 0), startTime: 0)
+        let current = motion.offset(at: 0.05)
+        let next = motion.retargeted(to: EyeOffset(dx: -4, dy: 6), at: 0.05)
+        XCTAssertEqual(next.offset(at: 0.05), current)  // 飛ばない
+        XCTAssertEqual(next.offset(at: 0.05 + EyeMotion.duration), EyeOffset(dx: -4, dy: 6))
+    }
+}

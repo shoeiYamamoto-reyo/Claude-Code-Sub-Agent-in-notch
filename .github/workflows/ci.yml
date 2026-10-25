@@ -48,5 +48,20 @@ jobs:
             -scheme NotchAgent \
             -configuration Debug \
             -destination 'platform=macOS' \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             build
+      # Xcode の無い Mac でも試せるように、ビルドしたアプリを Artifacts に置く。
+      # Apple Silicon では署名の無いアプリは起動できないので、アドホック署名（証明書なし）を付ける。
+      - name: Package app
+        run: |
+          APP=build/Build/Products/Debug/NotchAgent.app
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --verbose "$APP"
+          ditto -c -k --keepParent "$APP" NotchAgent.zip
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotchAgent-${{ github.sha }}
+          path: NotchAgent.zip
+          retention-days: 14

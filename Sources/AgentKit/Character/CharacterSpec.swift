@@ -90,7 +90,7 @@ public struct EyeOffset: Sendable, Equatable {
 public enum EyeTracking {
     /// 移動量が最大になる距離（pt）。
     public static let fullDistance: CGFloat = 220
-    public static let maxHorizontal: CGFloat = 6
+    public static let maxHorizontal: CGFloat = 10
     public static let maxUp: CGFloat = 4
     public static let maxDown: CGFloat = 12
     /// これより小さい変化では描き直さない（viewBox 単位）。
@@ -116,6 +116,50 @@ public enum EyeTracking {
     /// 前回の移動量から描き直す必要があるほど変わったか。
     public static func needsRedraw(from old: EyeOffset, to new: EyeOffset) -> Bool {
         abs(old.dx - new.dx) >= redrawThreshold || abs(old.dy - new.dy) >= redrawThreshold
+    }
+}
+
+/// 目の移動を、取得頻度（15 Hz）より細かく補間するための動き。
+/// 新しい目標が来たら、その時点の位置から目標へ `duration` かけて減速しながら近づく。
+/// 時刻はどちらも `Date.timeIntervalSinceReferenceDate`（秒）。
+public struct EyeMotion: Sendable, Equatable {
+    /// 1 回の補間にかける時間。取得間隔（約 0.066 秒）より長くして、動いている間は途切れず追うようにする。
+    public static let duration: TimeInterval = 0.15
+
+    public var from: EyeOffset
+    public var to: EyeOffset
+    public var startTime: TimeInterval
+
+    public init(from: EyeOffset, to: EyeOffset, startTime: TimeInterval) {
+        self.from = from
+        self.to = to
+        self.startTime = startTime
+    }
+
+    /// 動いていない状態。
+    public static func resting(at offset: EyeOffset) -> EyeMotion {
+        EyeMotion(from: offset, to: offset, startTime: -.infinity)
+    }
+
+    public var endTime: TimeInterval { startTime + Self.duration }
+
+    /// 時刻 `time` での目の位置。
+    public func offset(at time: TimeInterval) -> EyeOffset {
+        guard time < endTime else { return to }
+        let progress = max(0, (time - startTime) / Self.duration)
+        // ease-out（3 次）
+        let eased = CGFloat(1 - pow(1 - progress, 3))
+        return EyeOffset(dx: from.dx + (to.dx - from.dx) * eased, dy: from.dy + (to.dy - from.dy) * eased)
+    }
+
+    /// 時刻 `time` の位置から、新しい目標へ動き直す。
+    public func retargeted(to target: EyeOffset, at time: TimeInterval) -> EyeMotion {
+        EyeMotion(from: offset(at: time), to: target, startTime: time)
+    }
+
+    /// 補間中か（この間だけ描画頻度を上げる）。
+    public func isMoving(at time: TimeInterval) -> Bool {
+        time < endTime && from != to
     }
 }
 
