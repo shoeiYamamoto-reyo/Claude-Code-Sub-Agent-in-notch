@@ -1,0 +1,54 @@
+# XcodeGen の定義。`xcodegen generate` で NotchAgent.xcodeproj を作る（.xcodeproj は手で編集しない・コミットしない）。
+name: NotchAgent
+options:
+  bundleIdPrefix: dev.notchagent
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  AgentKit:
+    path: .
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Automatic
+  configs:
+    Debug:
+      CODE_SIGN_IDENTITY: "-"
+
+targets:
+  NotchAgent:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+    dependencies:
+      - package: AgentKit
+        product: AgentKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Notch Agent
+        CFBundleShortVersionString: "0.0.1"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.developer-tools
+        # メニューバー常駐（Dock とアプリ切り替えに出さない）
+        LSUIElement: true
+        NSHumanReadableCopyright: ""
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.notchagent.NotchAgent
+        PRODUCT_NAME: NotchAgent
+        GENERATE_INFOPLIST_FILE: NO
+
+schemes:
+  NotchAgent:
+    build:
+      targets:
+        NotchAgent: all
+    run:
+      config: Debug

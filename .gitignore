@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode（project.yml から生成する）
+*.xcodeproj/
+DerivedData/
+xcuserdata/
+*.xcworkspace/
+
+# XcodeGen が project.yml の info から生成する
+App/Info.plist
