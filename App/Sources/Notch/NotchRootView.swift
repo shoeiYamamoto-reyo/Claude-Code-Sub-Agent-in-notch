@@ -23,7 +23,7 @@ struct NotchRootView: View {
                         .clipped()
                 }
 
-                CharacterView(mood: model.mood, eyeOffset: model.eyeOffset)
+                CharacterView(mood: model.mood, eyeMotion: model.eyeMotion)
                     .frame(width: layout.characterSize.width, height: layout.characterSize.height)
                     .offset(x: layout.characterOffsetX)
             }

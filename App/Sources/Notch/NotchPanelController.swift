@@ -146,12 +146,14 @@ final class NotchPanelController {
 
     private func updateEyes(layout: NotchLayout, cursor: CGPoint) {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let target = model.mood == .idle && !reduceMotion
-            ? EyeTracking.offset(eyeCenter: layout.eyeCenter, cursor: cursor)
-            : .zero
-        if target == .zero || EyeTracking.needsRedraw(from: model.eyeOffset, to: target) {
-            if model.eyeOffset != target { model.eyeOffset = target }
+        guard model.mood == .idle && !reduceMotion else {
+            // 待機中以外は目を中央に戻す（補間しない）。
+            if model.eyeMotion != .resting(at: .zero) { model.eyeMotion = .resting(at: .zero) }
+            return
         }
+        let target = EyeTracking.offset(eyeCenter: layout.eyeCenter, cursor: cursor)
+        guard EyeTracking.needsRedraw(from: model.eyeMotion.to, to: target) else { return }
+        model.eyeMotion = model.eyeMotion.retargeted(to: target, at: Date.now.timeIntervalSinceReferenceDate)
     }
 
     // MARK: - 状態機械

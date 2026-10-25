@@ -3,28 +3,48 @@ import SwiftUI
 
 /// キャラクター（`docs/design/character.md`）。画像アセットは使わず `Canvas` で描く。
 ///
-/// 描き直すのは、状態ごとの低い頻度（`CharacterAnimation.frameInterval`）と、目の向きが変わったときだけ。
-/// エラー時と「視差効果を減らす」がオンのときはタイマーを持たない。
+/// 描き直すのは、状態ごとの低い頻度（`CharacterAnimation.frameInterval`）と、目が動いている間（60 fps）だけ。
+/// エラー時と「視差効果を減らす」がオンのときは、目が動いていなければタイマーを持たない。
 struct CharacterView: View {
     let mood: CharacterMood
-    let eyeOffset: EyeOffset
+    let eyeMotion: EyeMotion
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        if let interval = CharacterAnimation.frameInterval(for: mood), !reduceMotion {
-            TimelineView(.periodic(from: .now, by: interval)) { context in
-                CharacterCanvas(
-                    mood: mood,
-                    eyeOffset: eyeOffset,
-                    pose: CharacterAnimation.pose(for: mood, at: context.date.timeIntervalSinceReferenceDate)
-                )
-            }
-        } else {
+        let interval = reduceMotion ? nil : CharacterAnimation.frameInterval(for: mood)
+        TimelineView(CharacterSchedule(baseInterval: interval, fastUntil: eyeMotion.endTime)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
             CharacterCanvas(
                 mood: mood,
-                eyeOffset: eyeOffset,
-                pose: CharacterAnimation.pose(for: mood, at: 0, reduceMotion: true)
+                eyeOffset: mood == .idle ? eyeMotion.offset(at: time) : .zero,
+                pose: CharacterAnimation.pose(for: mood, at: time, reduceMotion: reduceMotion)
             )
+        }
+    }
+}
+
+/// 目の補間中だけ 60 fps、それ以外は状態ごとの低い頻度（nil なら補間が終わったら止まる）。
+private struct CharacterSchedule: TimelineSchedule {
+    static let fastInterval: TimeInterval = 1.0 / 60
+
+    let baseInterval: TimeInterval?
+    /// この時刻（timeIntervalSinceReferenceDate）までは 60 fps で描く。
+    let fastUntil: TimeInterval
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
+        var next: Date? = startDate
+        let baseInterval = self.baseInterval
+        let fastUntil = self.fastUntil
+        return AnyIterator {
+            guard let current = next else { return nil }
+            if current.timeIntervalSinceReferenceDate < fastUntil {
+                next = current.addingTimeInterval(Self.fastInterval)
+            } else if let baseInterval {
+                next = current.addingTimeInterval(baseInterval)
+            } else {
+                next = nil
+            }
+            return current
         }
     }
 }

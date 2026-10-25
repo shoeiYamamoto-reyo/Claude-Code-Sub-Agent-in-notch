@@ -119,6 +119,50 @@ public enum EyeTracking {
     }
 }
 
+/// 目の移動を、取得頻度（15 Hz）より細かく補間するための動き。
+/// 新しい目標が来たら、その時点の位置から目標へ `duration` かけて減速しながら近づく。
+/// 時刻はどちらも `Date.timeIntervalSinceReferenceDate`（秒）。
+public struct EyeMotion: Sendable, Equatable {
+    /// 1 回の補間にかける時間。取得間隔（約 0.066 秒）より長くして、動いている間は途切れず追うようにする。
+    public static let duration: TimeInterval = 0.15
+
+    public var from: EyeOffset
+    public var to: EyeOffset
+    public var startTime: TimeInterval
+
+    public init(from: EyeOffset, to: EyeOffset, startTime: TimeInterval) {
+        self.from = from
+        self.to = to
+        self.startTime = startTime
+    }
+
+    /// 動いていない状態。
+    public static func resting(at offset: EyeOffset) -> EyeMotion {
+        EyeMotion(from: offset, to: offset, startTime: -.infinity)
+    }
+
+    public var endTime: TimeInterval { startTime + Self.duration }
+
+    /// 時刻 `time` での目の位置。
+    public func offset(at time: TimeInterval) -> EyeOffset {
+        guard time < endTime else { return to }
+        let progress = max(0, (time - startTime) / Self.duration)
+        // ease-out（3 次）
+        let eased = CGFloat(1 - pow(1 - progress, 3))
+        return EyeOffset(dx: from.dx + (to.dx - from.dx) * eased, dy: from.dy + (to.dy - from.dy) * eased)
+    }
+
+    /// 時刻 `time` の位置から、新しい目標へ動き直す。
+    public func retargeted(to target: EyeOffset, at time: TimeInterval) -> EyeMotion {
+        EyeMotion(from: offset(at: time), to: target, startTime: time)
+    }
+
+    /// 補間中か（この間だけ描画頻度を上げる）。
+    public func isMoving(at time: TimeInterval) -> Bool {
+        time < endTime && from != to
+    }
+}
+
 /// ある時刻の体の姿勢。`bodyAnchor` を支点に、拡大 → 回転 → 平行移動の順にかける。
 public struct CharacterPose: Sendable, Equatable {
     public var scaleX: CGFloat

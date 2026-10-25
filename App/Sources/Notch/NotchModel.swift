@@ -9,8 +9,8 @@ final class NotchModel {
     var layout: NotchLayout?
     var presentation: NotchPresentationState = .character
     var mood: CharacterMood = .idle
-    /// 待機中の目の移動量（viewBox 単位）。待機中以外は常に `.zero`。
-    var eyeOffset: EyeOffset = .zero
+    /// 待機中の目の動き（viewBox 単位）。待機中以外は常に中央で静止。
+    var eyeMotion: EyeMotion = .resting(at: .zero)
     /// `peek` に出す文。nil なら知らせることは無い。
     var noticeText: String?
     var displayChoice: DisplayChoice = .automatic
