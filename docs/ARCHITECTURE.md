@@ -1,0 +1,105 @@
+# アーキテクチャ方針
+
+- ステータス: v0.2（2026-10-25）
+- 詳細な決定は `docs/adr/` に ADR として残す。
+
+## 全体像
+
+```
+                    ┌──────── タスク起動（claude -p ... stream-json）────────┐
+                    │                                                         ▼
+NotchAgent.app ◀────┤                                                   Claude Code
+ ├─ ProjectRegistry … 登録プロジェクトと環境設定                            │
+ ├─ TaskRunner      … タスクの起動・停止・出力の読み取り                     │ hook: stdin JSON
+ ├─ HookServer      … ソケット受信・応答 ◀── Unix ソケット ── notch-hook（中継 CLI）
+ ├─ SessionStore    … セッション／サブエージェントの状態（hook と TaskRunner の両方から）
+ ├─ ApprovalQueue   … 承認待ちキュー
+ ├─ AgentCatalog    … .claude/agents の読み書き
+ └─ NotchUI         … NSPanel + SwiftUI（キャラクター、展開ウィンドウ）
+```
+
+- **notch-hook**: Claude Code の hooks から呼ばれる小さな実行ファイル。stdin の JSON をそのままソケットへ送る。承認系イベントはアプリの応答（ユーザーのクリック）を待ち、結果を stdout の JSON で返す。ソケットに接続できない・タイムアウトした場合は**何も出力せず exit 0**し、Claude Code の通常動作に任せる。
+- **NotchAgent.app**: メニューバー常駐（Dock 非表示）。ノッチ部分に枠なし `NSPanel` を置き、状態機械（`character → peek → expanded`）で表示を切り替える。
+  - `character`: キャラクターだけ表示。パネルはマウスを透過し、ホバー検知用の小さな領域だけ受ける。
+  - `peek`: 承認待ちなどを知らせる小さな吹き出し。
+  - `expanded`: ホバー中。プロジェクト、タスク投入、監視、承認、定義管理のタブ。
+- **キャラクター**: SwiftUI の `Canvas` + `TimelineView` で描く（画像アセットなし）。表情は状態（`idle / working / waiting / done / error`）の関数にし、待機中はアニメーション頻度を下げて CPU を使わない。
+- **TaskRunner**: プロジェクトの作業フォルダで `claude` を子プロセスとして起動し、stream-json の出力を読んで `SessionStore` に流す。停止はプロセスへのシグナル。起動方式の詳細は [ADR-0002](adr/0002-task-launch.md)。
+
+## モジュール構成
+
+| モジュール | 種類 | 内容 | Linux でテスト |
+| --- | --- | --- | --- |
+| `AgentKit` | Swift Package (library) | hook イベントと stream-json のモデルとデコード、セッション状態の集約、承認キュー、プロジェクト設定、タスク起動コマンドの組み立て、エージェント定義（frontmatter）のパース／生成、settings.json の安全なマージ、ソケットのワイヤプロトコル | ✅ |
+| `notch-hook` | Swift Package (executable) | 中継 CLI。`AgentKit` のプロトコル定義を使う | ✅（ソケット部分含む） |
+| `NotchAgent` | Xcode アプリ（XcodeGen） | AppKit / SwiftUI の UI、キャラクター描画、ソケットサーバー、子プロセス管理、ファイル監視、Keychain | ❌（macOS のみ） |
+
+ディレクトリ案:
+```
+Package.swift            # AgentKit, notch-hook
+Sources/AgentKit/
+Sources/notch-hook/
+Tests/AgentKitTests/
+App/                     # NotchAgent（SwiftUI + AppKit）
+project.yml              # XcodeGen
+docs/
+```
+
+## 主要な設計判断（ADR 候補）
+1. **連携方式は hooks + Unix ソケット**（coucou と同じ）。トランスクリプト監視は補助（サブエージェントの詳細取得）に限る。→ [ADR-0001](adr/0001-hook-bridge.md)
+2. **タスクの起動は `claude` CLI を子プロセスで実行**する。→ [ADR-0002](adr/0002-task-launch.md)
+3. **永続化するのはプロジェクト登録とタスク履歴だけ**（`~/Library/Application Support/<App>/` に JSON）。実行中セッションの状態はメモリのみ。
+4. **設定ファイル書き込みは必ず「バックアップ → 差分 → 確認」**の 1 経路（`SafeFileWriter`）に集約する。
+5. **待機中はタイマーを止める**。描画更新はイベント受信時とホバー中のみ。
+
+## インターフェース草案（AgentKit）
+
+```swift
+public struct HookEvent: Sendable, Decodable {
+    public let name: HookEventName          // SessionStart, PreToolUse, ...
+    public let sessionID: String
+    public let cwd: String?
+    public let payload: JSONValue            // 未知フィールドも保持
+}
+
+public protocol SessionStore: Sendable {
+    func apply(_ event: HookEvent) async
+    func snapshot() async -> [Session]
+}
+
+public enum ApprovalDecision: Sendable { case allow, deny(reason: String?) }
+
+public protocol ApprovalQueue: Sendable {
+    func enqueue(_ request: ApprovalRequest) async -> ApprovalDecision   // ユーザー操作まで待つ
+    func resolve(_ id: ApprovalRequest.ID, with decision: ApprovalDecision) async
+}
+
+public struct Project: Sendable, Codable, Identifiable {
+    public let id: UUID
+    public var name: String
+    public var directory: URL
+    public var environment: ProjectEnvironment   // model, permissionMode, allowedTools, env
+}
+
+public struct TaskRequest: Sendable {
+    public var project: Project.ID
+    public var agent: String?                    // nil = おまかせ
+    public var prompt: String
+}
+
+public protocol TaskRunner: Sendable {
+    func start(_ request: TaskRequest) async throws -> TaskHandle
+    func stop(_ handle: TaskHandle) async
+}
+
+public struct AgentDefinition: Sendable, Equatable {
+    public var name: String
+    public var description: String
+    public var tools: [String]?
+    public var model: String?
+    public var body: String
+    public var scope: Scope                  // .user / .project(URL)
+}
+```
+
+hook イベント名・ペイロードの正確な形は `docs/claude-code-spec.md` で確認してから確定する。
