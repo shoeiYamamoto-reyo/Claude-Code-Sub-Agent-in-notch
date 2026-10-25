@@ -1,0 +1,178 @@
+import Dispatch
+import Foundation
+
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
+
+/// アプリ側のソケット受信（ADR-0001）。中継 CLI からの 1 行を受け取り、`handler` に渡す。
+///
+/// - 1 接続 1 メッセージ。行を読んだら閉じる（応答を返す `wait` / `ask` は M2-1 で足す）。
+/// - 状態はすべて内部の直列キューで扱う。`handler` もそのキューで呼ばれる。
+/// - fd を閉じるのは読み取りソースの cancel handler だけ（二重 close を防ぐ）。
+/// - イベントが無いあいだは何も動かない（タイマーなし）。
+public final class HookSocketServer: @unchecked Sendable {
+    public enum StartError: Error, Equatable {
+        case pathTooLong
+        case alreadyRunning
+        case system(call: String, errno: Int32)
+    }
+
+    public typealias Handler = @Sendable (HookWireMessage) -> Void
+
+    public static let maxClients = 32
+    public static let readTimeout: DispatchTimeInterval = .seconds(5)
+
+    public let path: String
+    private let handler: Handler
+    private let queue = DispatchQueue(label: "dev.notchagent.HookSocketServer")
+    private var listenSource: DispatchSourceRead?
+    private var clients: [Int: Client] = [:]
+    private var nextClientID = 0
+
+    private final class Client {
+        let source: DispatchSourceRead
+        var buffer = Data()
+        init(source: DispatchSourceRead) { self.source = source }
+    }
+
+    public init(path: String, handler: @escaping Handler) {
+        self.path = path
+        self.handler = handler
+    }
+
+    deinit {
+        listenSource?.cancel()
+        for client in clients.values { client.source.cancel() }
+    }
+
+    /// ソケットを作って待ち受けを始める。古いソケットファイルが残っていれば消す。
+    public func start() throws {
+        guard HookBridge.fitsInSocketAddress(path), let address = UnixSocket.address(for: path) else {
+            throw StartError.pathTooLong
+        }
+        let directory = (path as NSString).deletingLastPathComponent
+        do {
+            try FileManager.default.createDirectory(
+                atPath: directory,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+        } catch {
+            throw StartError.system(call: "mkdir", errno: 0)
+        }
+        chmod(directory, 0o700)
+
+        if FileManager.default.fileExists(atPath: path) {
+            if UnixSocketClient.isListening(at: path) { throw StartError.alreadyRunning }
+            unlink(path)
+        }
+
+        let fd = socket(AF_UNIX, UnixSocket.streamType, 0)
+        guard fd >= 0 else { throw StartError.system(call: "socket", errno: errno) }
+        guard UnixSocket.withSockaddr(address, { bind(fd, $0, $1) }) == 0 else {
+            let code = errno
+            close(fd)
+            throw StartError.system(call: "bind", errno: code)
+        }
+        chmod(path, 0o600)
+        guard listen(fd, 16) == 0, UnixSocket.setNonBlocking(fd) else {
+            let code = errno
+            close(fd)
+            unlink(path)
+            throw StartError.system(call: "listen", errno: code)
+        }
+
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+        source.setEventHandler { [weak self] in self?.acceptPending(listenFD: fd) }
+        source.setCancelHandler { close(fd) }
+        queue.sync { listenSource = source }
+        source.resume()
+    }
+
+    /// 待ち受けをやめ、開いている接続を閉じ、ソケットファイルを消す。
+    public func stop() {
+        queue.sync {
+            listenSource?.cancel()
+            listenSource = nil
+            for client in clients.values { client.source.cancel() }
+            clients.removeAll()
+        }
+        unlink(path)
+    }
+
+    // MARK: - 以下は queue の上だけで動く
+
+    private func acceptPending(listenFD: Int32) {
+        while true {
+            let fd = accept(listenFD, nil, nil)
+            if fd < 0 {
+                if errno == EINTR { continue }
+                return  // EAGAIN: 今は待っている接続が無い
+            }
+            guard clients.count < Self.maxClients, UnixSocket.setNonBlocking(fd) else {
+                close(fd)
+                continue
+            }
+            UnixSocket.disableSigpipe(fd)
+            let id = nextClientID
+            nextClientID += 1
+            let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+            source.setEventHandler { [weak self] in self?.readAvailable(clientID: id, fd: fd) }
+            source.setCancelHandler { close(fd) }
+            clients[id] = Client(source: source)
+            source.resume()
+            // 送りかけで止まった相手をいつまでも抱えない。
+            queue.asyncAfter(deadline: .now() + Self.readTimeout) { [weak self] in
+                self?.finish(clientID: id)
+            }
+        }
+    }
+
+    private func readAvailable(clientID: Int, fd: Int32) {
+        guard let client = clients[clientID] else { return }
+        var chunk = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            let count = chunk.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
+            if count > 0 {
+                client.buffer.append(contentsOf: chunk[0..<count])
+                if let newline = client.buffer.firstIndex(of: UInt8(ascii: "\n")) {
+                    deliver(client.buffer[client.buffer.startIndex..<newline])
+                    finish(clientID: clientID)
+                    return
+                }
+                if client.buffer.count > HookBridge.maxMessageBytes {
+                    finish(clientID: clientID)
+                    return
+                }
+            } else if count == 0 {
+                // 改行なしで閉じられても、そこまでを 1 行として扱う。
+                deliver(client.buffer)
+                finish(clientID: clientID)
+                return
+            } else if errno == EINTR {
+                continue
+            } else if errno == EAGAIN || errno == EWOULDBLOCK {
+                return
+            } else {
+                finish(clientID: clientID)
+                return
+            }
+        }
+    }
+
+    private func deliver(_ line: Data) {
+        guard !line.isEmpty,
+              let message = try? HookWireMessage.decode(line: Data(line)),
+              message.v == HookBridge.protocolVersion
+        else { return }
+        handler(message)
+    }
+
+    private func finish(clientID: Int) {
+        guard let client = clients.removeValue(forKey: clientID) else { return }
+        client.source.cancel()
+    }
+}
