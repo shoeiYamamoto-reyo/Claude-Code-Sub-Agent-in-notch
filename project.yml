@@ -29,6 +29,11 @@ targets:
     dependencies:
       - package: AgentKit
         product: AgentKit
+      # 中継 CLI を Contents/MacOS/notch-hook に入れる。hooks のインストール時にアプリの外へコピーして使う（ADR-0001）。
+      - target: notch-hook
+        embed: true
+        copy:
+          destination: executables
     info:
       path: App/Info.plist
       properties:
@@ -44,6 +49,21 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.notchagent.NotchAgent
         PRODUCT_NAME: NotchAgent
         GENERATE_INFOPLIST_FILE: NO
+
+  # 中継 CLI（Swift Package の notch-hook と同じソース）。アプリに同梱するために Xcode のターゲットにもする。
+  notch-hook:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Sources/notch-hook
+    dependencies:
+      - package: AgentKit
+        product: AgentKit
+    settings:
+      base:
+        PRODUCT_NAME: notch-hook
+        PRODUCT_BUNDLE_IDENTIFIER: dev.notchagent.notch-hook
+        SKIP_INSTALL: YES
 
 schemes:
   NotchAgent:

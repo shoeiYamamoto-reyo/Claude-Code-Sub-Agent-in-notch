@@ -214,4 +214,4 @@ exit 0 で stdout に JSON を 1 つだけ出す。
 | U1 | 対話ターミナルで `PermissionRequest` フック実行中にターミナル側の確認も出るか、ターミナルで答えるとフックは kill されるか | M2-1 |
 | U2 | `claude -p` で起動したタスクの `PermissionRequest` をノッチから許可して続行できるか | M3-3 |
 | U3 | `claude -p --agent <name>` の実動作（プロジェクトの `.claude/agents/` の定義が使われるか） | M3-3 |
-| U4 | 実際の hook ペイロード（フィクスチャ化するため、Mac で全イベントを記録） | M1-3 |
+| U4 | 実際の hook ペイロード（フィクスチャ化するため、Mac で全イベントを記録）。M1-3 では docs の例からフィクスチャを作成。アプリのメニュー「開発用 → 受信したイベントを記録」で `~/Library/Application Support/NotchAgent/captures/` に保存できるので、採取したら伏せ字にして `Tests/AgentKitTests/Fixtures/hooks/` に足す | M1 の手動確認時 |

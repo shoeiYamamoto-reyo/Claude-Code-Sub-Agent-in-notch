@@ -9,7 +9,12 @@ struct NotchAgentApp: App {
 
     var body: some Scene {
         MenuBarExtra("Notch Agent", systemImage: "circle.dotted") {
-            MenuContent(model: appDelegate.model, controller: appDelegate.controller)
+            MenuContent(
+                model: appDelegate.model,
+                controller: appDelegate.controller,
+                hookCenter: appDelegate.hookCenter,
+                hookSetup: appDelegate.hookSetup
+            )
         }
     }
 }
@@ -18,9 +23,17 @@ struct NotchAgentApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = NotchModel()
     lazy var controller = NotchPanelController(model: model)
+    lazy var hookCenter = HookCenter(model: model, controller: controller)
+    lazy var hookSetup = HookSetup(model: model)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
+        hookCenter.start()
+        hookSetup.refreshStatus()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        hookCenter.stop()
     }
 }
 
@@ -28,11 +41,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 private struct MenuContent: View {
     let model: NotchModel
     let controller: NotchPanelController
+    let hookCenter: HookCenter
+    let hookSetup: HookSetup
 
     var body: some View {
         Text("Notch Agent（開発中）")
-        Text("プロトコル v\(HookBridge.protocolVersion)")
+        Text(receiverText)
             .foregroundStyle(.secondary)
+        Divider()
+        Text(installText)
+        Button(model.hookInstallStatus == .installed ? "hooks を再インストール…" : "hooks をインストール…") {
+            hookSetup.beginInstall()
+        }
+        Button("hooks をアンインストール…") {
+            hookSetup.beginUninstall()
+        }
+        .disabled(model.hookInstallStatus == .notInstalled)
+        Menu("開発用") {
+            Button(checked("受信したイベントを記録", model.isCapturingEvents)) {
+                hookCenter.isCapturing.toggle()
+            }
+            Button("記録フォルダを開く") {
+                try? FileManager.default.createDirectory(at: hookCenter.captureDirectory, withIntermediateDirectories: true)
+                NSWorkspace.shared.open(hookCenter.captureDirectory)
+            }
+        }
         Divider()
         Menu("キャラクターの状態（確認用）") {
             ForEach(CharacterMood.allCases, id: \.self) { mood in
@@ -57,6 +90,27 @@ private struct MenuContent: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    private var receiverText: String {
+        switch model.receiver {
+        case .listening:
+            let count = model.sessions.count
+            return count == 0 ? "受信中（セッションなし）" : "受信中（セッション \(count) 件）"
+        case .stopped:
+            return "受信停止中"
+        case .failed(let reason):
+            return "受信エラー: \(reason)"
+        }
+    }
+
+    private var installText: String {
+        switch model.hookInstallStatus {
+        case .installed: "hooks: インストール済み"
+        case .outdated: "hooks: 更新が必要"
+        case .notInstalled: "hooks: 未インストール"
+        case nil: "hooks: settings.json を読めません"
+        }
     }
 
     private func checked(_ title: String, _ isOn: Bool) -> String {

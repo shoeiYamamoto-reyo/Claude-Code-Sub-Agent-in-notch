@@ -20,7 +20,8 @@ let package = Package(
         ),
         .testTarget(
             name: "AgentKitTests",
-            dependencies: ["AgentKit"]
+            dependencies: ["AgentKit"],
+            resources: [.copy("Fixtures")]
         ),
     ]
 )
