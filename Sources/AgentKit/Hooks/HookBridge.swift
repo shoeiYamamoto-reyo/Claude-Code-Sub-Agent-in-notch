@@ -17,6 +17,15 @@ public enum HookBridge {
     /// 中継 CLI がソケットへの接続を諦めるまでの時間（ミリ秒）。
     public static let connectTimeoutMilliseconds = 300
 
+    /// 応答待ち（`--wait` / `--ask`）で中継 CLI が応答を待つ時間。settings.json の timeout（120 / 130 秒）より少し短くし、
+    /// Claude Code に止められる前に自分で静かに終わる。
+    public static let waitResponseTimeoutMilliseconds = 118_000
+    public static let askResponseTimeoutMilliseconds = 128_000
+
+    /// アプリ側が応答待ちを諦める時間（ADR-0001）。諦めたら何も返さずに閉じ、ターミナルの確認に任せる。
+    public static let waitGiveUpSeconds: TimeInterval = 115
+    public static let askGiveUpSeconds: TimeInterval = 125
+
     /// 1 メッセージの上限。超えるものは中継 CLI が送らず、アプリも受け取らない。
     public static let maxMessageBytes = 1 << 20
 

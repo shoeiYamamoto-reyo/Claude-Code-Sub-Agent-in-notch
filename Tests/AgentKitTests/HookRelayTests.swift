@@ -58,7 +58,7 @@ final class HookRelayTests: XCTestCase {
     }
 
     func testRelayedEventReachesServer() throws {
-        let received = Received()
+        let received = Received<HookWireMessage>()
         let expectation = expectation(description: "received")
         let server = HookSocketServer(path: socketPath) { message in
             received.append(message)
@@ -70,7 +70,7 @@ final class HookRelayTests: XCTestCase {
         XCTAssertEqual(run(stopPayload), .sent)
         wait(for: [expectation], timeout: 2)
 
-        let message = try XCTUnwrap(received.messages.first)
+        let message = try XCTUnwrap(received.values.first)
         XCTAssertEqual(message.mode, .event)
         XCTAssertEqual(message.env.termProgram, "vscode")
         let event = try HookEvent(json: message.hook)
@@ -79,7 +79,7 @@ final class HookRelayTests: XCTestCase {
     }
 
     func testServerHandlesManyConnectionsAndIgnoresGarbage() throws {
-        let received = Received()
+        let received = Received<HookWireMessage>()
         let expectation = expectation(description: "received")
         expectation.expectedFulfillmentCount = 10
         let server = HookSocketServer(path: socketPath) { message in
@@ -102,7 +102,7 @@ final class HookRelayTests: XCTestCase {
         XCTAssertTrue(UnixSocketClient.send(withoutNewline, to: socketPath, timeoutMilliseconds: 300))
 
         wait(for: [expectation], timeout: 3)
-        XCTAssertEqual(received.messages.count, 10)
+        XCTAssertEqual(received.values.count, 10)
     }
 
     func testSecondServerOnSamePathIsRejected() throws {
@@ -163,23 +163,5 @@ final class HookRelayTests: XCTestCase {
         }
         #endif
         return Bundle.main.bundleURL
-    }
-}
-
-/// 別スレッドから呼ばれるハンドラの受け取り先。
-private final class Received: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [HookWireMessage] = []
-
-    func append(_ message: HookWireMessage) {
-        lock.lock()
-        storage.append(message)
-        lock.unlock()
-    }
-
-    var messages: [HookWireMessage] {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage
     }
 }
