@@ -1,4 +1,5 @@
 import AgentKit
+import Foundation
 import Observation
 
 /// ノッチの表示に必要な状態。変更は `NotchPanelController` だけが行い、ビューは読むだけ。
