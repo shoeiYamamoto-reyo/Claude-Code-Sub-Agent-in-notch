@@ -8,7 +8,7 @@
 - **コード**: MIT（`LICENSE`, © 2026 Louis Raillé）。流用するファイルの先頭に、著作権表示と MIT の許諾文を残す。
 - **アセット・名前**: `LICENSE-ASSETS.md` で別扱い（All rights reserved）。対象は名前「Coucou」「Mochi」、**Mochi のキャラクター（デザイン・見た目・表情・アニメーション）**、アプリ／メニューバーのアイコン、`Resources/sounds/` の音、`docs/media/` と `design/` の画像・動画。
   - → `BotEngine.swift` / `MochiOutfitDrawing.swift` などキャラクターを描くコードは、コードとしては MIT でも**出来上がる見た目が Mochi そのもの**になるため流用しない。描画の仕組み（`TimelineView` + `Canvas` の構成）だけ参考にする。
-  - 音も流用しない。
+  - 音も流用しない。効果音の仕組み（`SoundEngine.swift`）と鳴らす場面は [design/sound.md](design/sound.md) にまとめ、音はコードで合成したオリジナルにした。
 - 当面の方針: **コードはコピーせず、設計を参考に書き直す**。どうしてもまとまった量を移すときは、そのファイルに出典コメントと MIT 表示を入れ、PR に明記する。
 
 ## 1. 全体の構成

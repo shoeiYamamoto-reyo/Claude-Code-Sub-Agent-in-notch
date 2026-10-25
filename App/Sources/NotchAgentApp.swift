@@ -44,6 +44,7 @@ private struct MenuContent: View {
         Button(checked("お知らせ（peek）を試す", model.noticeText != nil)) {
             controller.setNotice(model.noticeText == nil ? "承認待ちのお知らせの例です（確認用）" : nil)
         }
+        SoundMenu(sound: controller.sound)
         Menu("表示する画面") {
             ForEach(DisplayChoice.allCases, id: \.self) { choice in
                 Button(checked(choice.displayName, model.displayChoice == choice)) {

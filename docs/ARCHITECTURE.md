@@ -33,7 +33,7 @@ NotchAgent.app ◀────┤                                               
 
 | モジュール | 種類 | 内容 | Linux でテスト |
 | --- | --- | --- | --- |
-| `AgentKit` | Swift Package (library) | hook イベントと stream-json のモデルとデコード、セッション状態の集約、承認キュー、プロジェクト設定、タスク起動コマンドの組み立て、エージェント定義（frontmatter）のパース／生成、settings.json の安全なマージ、ソケットのワイヤプロトコルと Claude Code 向け出力への変換、ノッチの寸法計算と表示の状態機械 | ✅ |
+| `AgentKit` | Swift Package (library) | hook イベントと stream-json のモデルとデコード、セッション状態の集約、承認キュー、プロジェクト設定、タスク起動コマンドの組み立て、エージェント定義（frontmatter）のパース／生成、settings.json の安全なマージ、ソケットのワイヤプロトコルと Claude Code 向け出力への変換、ノッチの寸法計算と表示の状態機械、効果音の合成と鳴らす条件 | ✅ |
 | `notch-hook` | Swift Package (executable) | 中継 CLI。`AgentKit` のプロトコル定義を使う | ✅（ソケット部分含む） |
 | `NotchAgent` | Xcode アプリ（XcodeGen） | AppKit / SwiftUI の UI、キャラクター描画、ソケットサーバー、子プロセス管理、ファイル監視、Keychain | ❌（macOS のみ） |
 
