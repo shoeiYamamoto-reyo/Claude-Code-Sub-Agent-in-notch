@@ -26,7 +26,6 @@ final class NotchPanelController {
     private var deadlineTask: Task<Void, Never>?
     private var pointerTask: Task<Void, Never>?
     private var lastPointerUpdate = ContinuousClock.now - .seconds(1)
-    /// 承認・質問の音を鳴らした直後は、お知らせ（peek）が出ても `notice` を重ねて鳴らさない。
     /// この時刻までは peek の `notice` を鳴らさない（`playAlert` で代わりの音を鳴らした直後）。
     private var noticeSoundSuppressedUntil: Date?
 
