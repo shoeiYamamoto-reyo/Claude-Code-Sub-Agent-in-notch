@@ -11,6 +11,7 @@
 | M3 プロジェクトとタスク投入 | プロジェクトを登録し、サブエージェントに仕事を与えて結果を見る |
 | M4 定義の管理 | サブエージェント定義の作成・編集 |
 | M5 仕上げ・公開準備 | 日常使いの快適さと配布 |
+| M6 他アプリの通知（拡張） | git・メール・GitHub などの通知もノッチで受け取る |
 
 ## M0. 準備
 | # | タスク | 担当 | 完了条件 | テスト方法 |
@@ -59,6 +60,18 @@
 - ログイン時起動、設定画面、通知音・おやすみモード、差分表示（F3-6）。
 - タスク履歴（F3-8）、テンプレート（F2-6）、git worktree での並行実行（F2-5）、ターミナルで開く（F2-7）。
 - 公開時: 英語対応、アプリ署名と公証、README のインストール手順、リリース自動化。
+
+## M6. 他アプリの通知（拡張）
+方針は [external-notifications.md](external-notifications.md)。6-1〜6-4 は M2 の後ならいつでも着手できる（ソケットと承認キューの優先度付けが前提）。
+
+| # | タスク | 担当 | 完了条件 | テスト方法 |
+| --- | --- | --- | --- | --- |
+| 6-1 | ☐ ワイヤプロトコルに `notify` を追加し、`ExternalNotification` のモデル・検証・`NotificationStore`（直近 N 件、既読、ミュート）を `AgentKit` に実装 | swift-macos-engineer | 不正な入力でも落ちず、上限件数で古いものから消える | `swift test` |
+| 6-2 | ☐ `notch-notify` CLI（送信のみ、`run -- <cmd>` で終了通知、アプリ不在で即終了） | swift-macos-engineer | ソケット不在時に 100 ms 以内で終了し、`run` は元コマンドの終了コードを返す | `swift test` |
+| 6-3 | ☐ 「通知」タブと peek・キャラクターへの反映（承認待ちを常に優先） | swift-macos-engineer | 承認待ちがある間は外部通知で peek が置き換わらない | `swift test`（優先度）+ 手動 |
+| 6-4 | ☐ レシピ集（git hooks、Mail.app ルール、ショートカット、launchd）を docs に追加 | swift-macos-engineer | 手順どおりに設定すると通知が届く | 手動 |
+| 6-5 | ☐ GitHub 連携（Notifications API、Keychain、`If-Modified-Since` / `X-Poll-Interval`、種類の絞り込み） | swift-macos-engineer | 304 時は何も更新せず、間隔を守る | `swift test`（応答フィクスチャ）+ 手動 |
+| 6-6 | ☐ Slack 連携（Socket Mode）と Dock バッジ表示は需要を見て判断 | architect | 採否を ADR に残す | レビュー |
 
 ## 各タスクの完了の定義（共通）
 - テストが追加され、CI が緑。
