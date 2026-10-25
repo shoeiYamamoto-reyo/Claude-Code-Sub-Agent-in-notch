@@ -125,8 +125,8 @@ Claude Code の作業を「プロジェクト単位」で、Mac のノッチに�
 | 保守性 | 外部依存なし。UI 非依存のロジックは Swift Package（`AgentKit`）に置き、Linux でも `swift test` できる |
 | ライセンス | coucou のコードを流用する場合は MIT の著作権表示を残す。キャラクター等のアセットは自作 |
 
-## 7. 前提・制約（要確認）
-次の Claude Code 仕様は `claude-code-integration` エージェントで一次情報を確認し、`docs/claude-code-spec.md` に記録してから実装する。
+## 7. 前提・制約（確認済み）
+次の Claude Code 仕様は M0-1 で一次情報を確認し、[`docs/claude-code-spec.md`](claude-code-spec.md) に記録した（各項目の出典と、実機確認が残っている項目 U1〜U4 はそちらを参照）。要点: 承認は `PermissionRequest` の JSON 出力で返せる／`AskUserQuestion` は `PreToolUse` の `updatedInput` で回答できる／サブエージェント内のイベントには `agent_id` が付く／`claude -p` でも hooks が動き、承認が必要な操作はフックが許可しない限り拒否される。
 - hooks のイベント一覧とペイロード（`PermissionRequest`, `PreToolUse`, `Notification`, `SubagentStart` / `SubagentStop`, `SessionStart` / `SessionEnd`, `Stop` など）
 - 権限の許可／拒否を hook の JSON 出力で返す方法と、hook のタイムアウト既定値
 - サブエージェント実行をセッション内で識別する方法（hook ペイロード、またはトランスクリプト `~/.claude/projects/*/*.jsonl`）

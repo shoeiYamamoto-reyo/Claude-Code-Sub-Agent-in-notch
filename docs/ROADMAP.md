@@ -15,11 +15,11 @@
 ## M0. 準備
 | # | タスク | 担当 | 完了条件 | テスト方法 |
 | --- | --- | --- | --- | --- |
-| 0-1 | ☐ Claude Code の hooks / agents / settings / CLI（`-p`, stream-json, エージェント指定, `--resume`）/ トランスクリプト仕様を一次情報で確認し `docs/claude-code-spec.md` にまとめる | claude-code-integration | REQUIREMENTS 7 章の項目すべてに「確認済み（出典 URL）」か「未確認」が付いている | レビュー |
-| 0-2 | ☐ coucou の hook 中継・ソケット・承認キュー・ノッチ表示・キャラクター描画の実装を調査し `docs/coucou-notes.md` にまとめる | coucou-researcher | 参考にする箇所のファイルパスと要点、流用時のライセンス注意点 | レビュー |
-| 0-3 | ☐ 0-1, 0-2 を受けて ARCHITECTURE.md と ADR-0001 / 0002 を確定する | architect | ADR が「承認」 | レビュー |
-| 0-4 | ☐ リポジトリの骨組み: `Package.swift`（AgentKit, notch-hook）、`project.yml`、空のアプリ、`.gitignore` | swift-macos-engineer | `swift build` と `xcodegen && xcodebuild` が通る | CI |
-| 0-5 | ☐ CI: Linux で `swift test`、macOS で `xcodebuild build test` | test-engineer | PR で自動実行され緑 | CI |
+| 0-1 | ☑ Claude Code の hooks / agents / settings / CLI（`-p`, stream-json, エージェント指定, `--resume`）/ トランスクリプト仕様を一次情報で確認し `docs/claude-code-spec.md` にまとめる | claude-code-integration | REQUIREMENTS 7 章の項目すべてに「確認済み（出典 URL）」か「未確認」が付いている | レビュー |
+| 0-2 | ☑ coucou の hook 中継・ソケット・承認キュー・ノッチ表示・キャラクター描画の実装を調査し `docs/coucou-notes.md` にまとめる | coucou-researcher | 参考にする箇所のファイルパスと要点、流用時のライセンス注意点 | レビュー |
+| 0-3 | ☑ 0-1, 0-2 を受けて ARCHITECTURE.md と ADR-0001 / 0002 を確定する | architect | ADR が「承認」 | レビュー |
+| 0-4 | ☑ リポジトリの骨組み: `Package.swift`（AgentKit, notch-hook）、`project.yml`、空のアプリ、`.gitignore` | swift-macos-engineer | `swift build` と `xcodegen && xcodebuild` が通る | CI |
+| 0-5 | ☑ CI: Linux で `swift test`、macOS で `swift test` と `xcodebuild build`（アプリのテストターゲットができたら `test` も足す） | test-engineer | PR で自動実行され緑 | CI |
 
 ## M1. 常駐と監視
 | # | タスク | 担当 | 完了条件 | テスト方法 |

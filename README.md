@@ -7,3 +7,15 @@ Mac のノッチから Claude Code のエージェント／サブエージェン
 - ロードマップ: [docs/ROADMAP.md](docs/ROADMAP.md)
 - 開発の流れ: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 - サブエージェント構成とルール: [CLAUDE.md](CLAUDE.md)
+
+## ビルド
+```sh
+# AgentKit と notch-hook（macOS / Linux）
+swift build
+swift test
+
+# アプリ（macOS、Xcode 16 以上と XcodeGen が必要）
+brew install xcodegen
+xcodegen generate
+open NotchAgent.xcodeproj
+```
