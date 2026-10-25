@@ -29,7 +29,7 @@ ROADMAP の 1-2 を進めて。architect で設計確認 → swift-macos-enginee
 | --- | --- |
 | `docs/REQUIREMENTS.md` | 要件定義（何を作るか） |
 | `docs/ARCHITECTURE.md` | 構成と設計方針（どう作るか） |
-| `docs/adr/` | 設計判断の記録 |
+| `docs/adr/` | 設計判断の記録（0001: hooks 連携、0002: タスク起動） |
 | `docs/ROADMAP.md` | タスクと順番、進捗 |
 | `docs/claude-code-spec.md` | 確認済みの Claude Code 仕様（M0 で作成） |
 | `docs/coucou-notes.md` | coucou の調査メモ（M0 で作成） |
