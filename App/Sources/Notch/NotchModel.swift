@@ -24,6 +24,10 @@ final class NotchModel {
     var lastEventAt: Date?
     /// `~/.claude/settings.json` に notch-hook が登録されているか。
     var hookInstallStatus: HookInstaller.Status?
+    /// ノッチでの応答を待っている要求（先頭が表示中）。M2。
+    var approvals: [ApprovalRequest] = []
+    /// 承認カードのボタンが押されたときの処理（`HookCenter.respond`）。
+    @ObservationIgnored var onApprovalReply: ((_ requestID: Int, _ reply: HookReply) -> Void)?
     /// 受信した hook をファイルに記録しているか（開発用）。
     var isCapturingEvents = false
 }

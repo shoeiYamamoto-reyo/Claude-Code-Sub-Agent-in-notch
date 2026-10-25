@@ -171,6 +171,15 @@ public struct SessionStore: Sendable, Equatable {
         byID[session.id] = session
     }
 
+    /// ノッチで権限リクエストに答えた。結果のイベント（拒否なら来ないこともある）を待たずに「実行中」に戻す。
+    public mutating func permissionAnswered(sessionID: String, at now: Date) {
+        guard var session = byID[sessionID], session.status == .waitingForApproval else { return }
+        session.pendingPermission = nil
+        session.status = .working
+        session.lastEventAt = now
+        byID[sessionID] = session
+    }
+
     // MARK: - 時間による片付け
 
     /// 次に `expire(now:)` を呼ぶべき時刻。何も起きないなら nil。

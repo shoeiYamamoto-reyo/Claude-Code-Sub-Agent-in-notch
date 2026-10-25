@@ -216,7 +216,7 @@ final class ApprovalQueueTests: XCTestCase {
 
     func testMakeRequests() {
         let request = permission(id: 1, command: "rm -rf build")
-        XCTAssertEqual(request.kind, .permission(toolName: "Bash", summary: "rm -rf build", detail: "rm -rf build", hasSuggestions: false))
+        XCTAssertEqual(request.kind, .permission(toolName: "Bash", summary: "rm -rf build", detail: "rm -rf build", alwaysAllow: nil))
         XCTAssertFalse(request.isQuestion)
 
         let question = ApprovalRequest.make(id: 2, message: message(.ask, [
@@ -239,6 +239,20 @@ final class ApprovalQueueTests: XCTestCase {
             "hook_event_name": .string("PreToolUse"), "tool_name": .string("AskUserQuestion"),
             "tool_input": .object(["questions": .array([])]),
         ]), receivedAt: t0))
+    }
+
+    func testSuggestionSummary() throws {
+        let suggestions = try JSONDecoder().decode(JSONValue.self, from: Data(#"""
+        [{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"npm test"},{"toolName":"WebSearch"}],"behavior":"allow","destination":"localSettings"},
+         {"type":"setMode","mode":"acceptEdits","destination":"session"}]
+        """#.utf8))
+        XCTAssertEqual(
+            ApprovalRequest.suggestionSummary(suggestions),
+            "Bash(npm test), WebSearch を.claude/settings.local.jsonに追加、権限モードを acceptEdits に（このセッション）"
+        )
+        XCTAssertNil(ApprovalRequest.suggestionSummary(.array([.object(["type": .string("somethingNew")])])))
+        XCTAssertNil(ApprovalRequest.suggestionSummary(.array([])))
+        XCTAssertNil(ApprovalRequest.suggestionSummary(nil))
     }
 
     func testParseRejectsOddQuestions() {

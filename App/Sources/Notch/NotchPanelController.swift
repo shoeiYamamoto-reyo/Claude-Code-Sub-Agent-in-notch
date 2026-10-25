@@ -26,6 +26,8 @@ final class NotchPanelController {
     private var deadlineTask: Task<Void, Never>?
     private var pointerTask: Task<Void, Never>?
     private var lastPointerUpdate = ContinuousClock.now - .seconds(1)
+    /// 承認・質問の音を鳴らした直後は、お知らせ（peek）が出ても `notice` を重ねて鳴らさない。
+    private var suppressNoticeSound = false
 
     init(model: NotchModel) {
         self.model = model
@@ -36,7 +38,7 @@ final class NotchPanelController {
     }
 
     func start() {
-        let hostingView = NSHostingView(rootView: NotchRootView(model: model))
+        let hostingView = FirstMouseHostingView(rootView: NotchRootView(model: model))
         hostingView.sizingOptions = []
         hostingView.addTrackingArea(NSTrackingArea(
             rect: .zero,
@@ -87,6 +89,12 @@ final class NotchPanelController {
         }
         model.mood = mood
         processPointer()
+    }
+
+    /// 承認待ち・質問などの知らせの音を鳴らす（docs/design/sound.md: peek の `notice` の代わりに鳴らす）。
+    func playAlert(_ cue: SoundCue) {
+        sound.play(cue)
+        suppressNoticeSound = true
     }
 
     func setNotice(_ text: String?) {
@@ -166,11 +174,13 @@ final class NotchPanelController {
 
     private func applyMachine() {
         if model.presentation != machine.state {
-            if let cue = SoundCue.forPresentationChange(from: model.presentation, to: machine.state) {
+            if let cue = SoundCue.forPresentationChange(from: model.presentation, to: machine.state),
+               !(cue == .notice && suppressNoticeSound) {
                 sound.play(cue)
             }
             model.presentation = machine.state
         }
+        suppressNoticeSound = false
         if let layout = model.layout {
             let hovering = layout.hoverFrame(for: machine.state).contains(NSEvent.mouseLocation)
             panel.ignoresMouseEvents = !hovering
@@ -188,6 +198,11 @@ final class NotchPanelController {
             self.processPointer()
         }
     }
+}
+
+/// 前面にないパネルでも、最初のクリックでボタンが押せるようにする（承認カードのボタン）。
+private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 /// トラッキング領域の受け手。パネルがクリックを受けている間のマウス移動を拾う。

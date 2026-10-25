@@ -48,8 +48,8 @@ public struct AskQuestion: Sendable, Equatable {
 /// ノッチで答えを待っている要求 1 件（F4-1、F4-5）。
 public struct ApprovalRequest: Sendable, Equatable, Identifiable {
     public enum Kind: Sendable, Equatable {
-        /// 権限リクエスト。`suggestions` があれば「常に許可」を出せる。
-        case permission(toolName: String, summary: String?, detail: String?, hasSuggestions: Bool)
+        /// 権限リクエスト。`alwaysAllow` は Claude Code が提案した「今後も許可」の内容（無ければ「常に許可」を出さない）。
+        case permission(toolName: String, summary: String?, detail: String?, alwaysAllow: String?)
         case question([AskQuestion])
     }
 
@@ -76,7 +76,7 @@ public struct ApprovalRequest: Sendable, Equatable, Identifiable {
                 toolName: toolName,
                 summary: ToolSummary.summarize(toolName: toolName, input: event.toolInput),
                 detail: detail(toolName: toolName, input: event.toolInput),
-                hasSuggestions: !(event.raw["permission_suggestions"]?.arrayValue ?? []).isEmpty
+                alwaysAllow: suggestionSummary(event.raw["permission_suggestions"])
             )
         case .ask:
             guard event.name == .preToolUse, toolName == AskQuestion.toolName,
@@ -116,6 +116,45 @@ public struct ApprovalRequest: Sendable, Equatable, Identifiable {
         }
         guard let text = keys.lazy.compactMap({ input[$0]?.stringValue }).first(where: { !$0.isEmpty }) else { return nil }
         return text.count > 600 ? String(text.prefix(599)) + "…" : text
+    }
+
+    /// `permission_suggestions` を、ボタンに添える 1 行にする（何が・どこに追加されるか）。読めなければ nil。
+    static func suggestionSummary(_ suggestions: JSONValue?) -> String? {
+        guard let items = suggestions?.arrayValue, !items.isEmpty else { return nil }
+        var parts: [String] = []
+        for item in items {
+            let target = destinationName(item["destination"]?.stringValue)
+            switch item["type"]?.stringValue {
+            case "addRules", "replaceRules":
+                let rules = (item["rules"]?.arrayValue ?? []).compactMap { rule -> String? in
+                    guard let tool = rule["toolName"]?.stringValue else { return nil }
+                    if let content = rule["ruleContent"]?.stringValue, !content.isEmpty { return "\(tool)(\(content))" }
+                    return tool
+                }
+                guard !rules.isEmpty else { return nil }
+                parts.append(rules.joined(separator: ", ") + " を\(target)に追加")
+            case "setMode":
+                guard let mode = item["mode"]?.stringValue else { return nil }
+                parts.append("権限モードを \(mode) に（\(target)）")
+            case "addDirectories":
+                let directories = (item["directories"]?.arrayValue ?? []).compactMap(\.stringValue)
+                guard !directories.isEmpty else { return nil }
+                parts.append(directories.joined(separator: ", ") + " を作業フォルダに追加（\(target)）")
+            default:
+                return nil  // 知らない種類は中身を説明できないので「常に許可」を出さない
+            }
+        }
+        return parts.joined(separator: "、")
+    }
+
+    static func destinationName(_ destination: String?) -> String {
+        switch destination {
+        case "session": "このセッション"
+        case "localSettings": ".claude/settings.local.json"
+        case "projectSettings": ".claude/settings.json"
+        case "userSettings": "~/.claude/settings.json"
+        default: destination ?? "設定"
+        }
     }
 
     static func inputKey(toolName: String, input: JSONValue?) -> String {
