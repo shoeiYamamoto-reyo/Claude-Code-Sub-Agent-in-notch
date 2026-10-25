@@ -90,7 +90,7 @@ public struct EyeOffset: Sendable, Equatable {
 public enum EyeTracking {
     /// 移動量が最大になる距離（pt）。
     public static let fullDistance: CGFloat = 220
-    public static let maxHorizontal: CGFloat = 6
+    public static let maxHorizontal: CGFloat = 10
     public static let maxUp: CGFloat = 4
     public static let maxDown: CGFloat = 12
     /// これより小さい変化では描き直さない（viewBox 単位）。
