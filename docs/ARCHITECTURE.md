@@ -119,13 +119,21 @@ public protocol TaskRunner: Sendable {
     func stop(_ handle: TaskHandle) async
 }
 
+// M3-2 で実装（Sources/AgentKit/Agents/）。読み取りのみ。書き出し（未知のフィールドを保つ往復）は M4-1。
 public struct AgentDefinition: Sendable, Equatable {
     public var name: String
     public var description: String
-    public var tools: [String]?
+    public var tools: [String]?              // nil = 全部を引き継ぐ
     public var model: String?
     public var body: String
-    public var scope: Scope                  // .user / .project(URL)
+    public var frontmatter: Frontmatter      // 書かれた順の全項目（入れ子のマップは raw）
+    public static func parse(_ text: String) -> Result<AgentDefinition, Problem>   // Problem = Claude Code が読み飛ばす理由
+}
+
+public struct AgentCatalog: Sendable, Equatable {
+    public var entries: [Entry]              // 優先順: 近いプロジェクトの .claude/agents → 遠いもの → ~/.claude/agents。上書きされたものは shadowedBy
+    public var effective: [AgentDefinition]  // 実際に使われる定義（タスク投入の選択肢、M3-5）
+    public static func load(projectDirectory: String?, home: String) -> AgentCatalog
 }
 ```
 
