@@ -69,7 +69,7 @@ private struct TaskRunRow: View {
 
     private var color: Color {
         if TaskResultSummary.isError(task) { return .red }
-        switch task.state {
+        return switch task.state {
         case .running: .blue
         case .stopping: .orange
         case .finished: .green
