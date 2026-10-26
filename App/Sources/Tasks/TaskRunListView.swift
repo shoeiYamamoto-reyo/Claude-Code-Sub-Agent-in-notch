@@ -12,10 +12,15 @@ struct TaskRunListView: View {
             Text("アプリから始めたタスク")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.6))
-            ForEach(tasks.prefix(3)) { task in
+            ForEach(visibleTasks) { task in
                 TaskRunRow(task: task) { onStop(task.id) }
             }
         }
+    }
+
+    /// 動いているものは（停止できるよう）すべて、終わったものは新しい 3 件まで。
+    private var visibleTasks: [TaskRun] {
+        tasks.filter(\.isActive) + tasks.filter { !$0.isActive }.prefix(3)
     }
 }
 
