@@ -4,9 +4,12 @@ import SwiftUI
 /// 展開時に出すセッション一覧とサブエージェントのツリー（F3-1〜F3-3）。
 struct SessionListView: View {
     let sessions: [Session]
+    let projects: ProjectRegistry
     let receiver: ReceiverStatus
     let installStatus: HookInstaller.Status?
     let onInstallHooks: () -> Void
+    /// 未登録のフォルダをプロジェクトに登録する（F1-4）。
+    let onRegisterFolder: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -18,7 +21,11 @@ struct SessionListView: View {
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(sessions) { session in
-                            SessionRow(session: session)
+                            SessionRow(
+                                session: session,
+                                project: session.cwd.flatMap { projects.project(containing: $0) },
+                                onRegisterFolder: onRegisterFolder
+                            )
                         }
                     }
                     .padding(.bottom, 4)
@@ -89,6 +96,9 @@ struct SessionListView: View {
 
 private struct SessionRow: View {
     let session: Session
+    /// 作業フォルダが属するプロジェクト。nil なら未登録。
+    let project: Project?
+    let onRegisterFolder: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -102,6 +112,12 @@ private struct SessionRow: View {
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.5))
                     .lineLimit(1)
+                if project == nil, let cwd = session.cwd, !cwd.isEmpty {
+                    Button("登録") { onRegisterFolder(cwd) }
+                        .buttonStyle(CardButtonStyle(tint: .white))
+                        .controlSize(.small)
+                        .help("このフォルダをプロジェクトとして登録します")
+                }
             }
             if let line = activityLine {
                 Text(line)
@@ -119,6 +135,7 @@ private struct SessionRow: View {
 
     private var details: String {
         var parts: [String] = []
+        if let project, project.name != session.displayName { parts.append(project.name) }
         if let model = session.model { parts.append(model) }
         if let terminal = session.terminal { parts.append(terminal) }
         parts.append(session.lastEventAt.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)))

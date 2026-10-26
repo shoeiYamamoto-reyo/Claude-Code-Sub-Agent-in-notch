@@ -32,6 +32,19 @@ final class NotchModel {
     @ObservationIgnored var onInstallHooks: (() -> Void)?
     /// 受信した hook をファイルに記録しているか（開発用）。
     var isCapturingEvents = false
+
+    // MARK: - プロジェクト（ROADMAP 3-1）
+
+    /// 登録したプロジェクト。変更は `ProjectCenter` だけが行う。
+    var projects = ProjectRegistry()
+    /// 保存ファイルを読めなかったときの説明。この間は登録・編集できない。
+    var projectLoadError: String?
+    /// 「プロジェクトを追加…」（`ProjectCenter.beginAdd`）。
+    @ObservationIgnored var onAddProject: (() -> Void)?
+    /// プロジェクトの行を押したとき（`ProjectCenter.beginEdit`）。
+    @ObservationIgnored var onEditProject: ((Project.ID) -> Void)?
+    /// 未登録のフォルダで動いているセッションの「登録」（F1-4、`ProjectCenter.beginAdd(directory:)`）。
+    @ObservationIgnored var onRegisterFolder: ((String) -> Void)?
 }
 
 enum ReceiverStatus: Equatable {
