@@ -9,6 +9,8 @@ Package.resolved
 # Xcode（project.yml から生成する）
 *.xcodeproj/
 DerivedData/
+# xcodebuild -derivedDataPath build の出力（CI と同じ手順でのローカルビルド）
+/build/
 xcuserdata/
 *.xcworkspace/
 
