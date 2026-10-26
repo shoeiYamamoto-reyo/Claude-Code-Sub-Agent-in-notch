@@ -91,14 +91,14 @@ final class ProjectCenter {
             return missing.map { "秘密の環境変数「\($0)」の値を入力してください。" }
         }
 
+        // 先にファイルを書き、成功してから Keychain に触る（ファイルに無い項目を Keychain に残さない）。
         do {
-            for variable in secrets where !variable.value.isEmpty {
-                try ProjectSecrets.set(variable.value, projectID: project.id, name: variable.trimmedName)
-            }
             try ProjectRegistryFile.save(updated, to: filePath)
         } catch {
             return [error.localizedDescription]
         }
+        registry = updated
+        model.projects = registry
 
         // 秘密でなくなった・消した変数の値を Keychain から消す。
         let kept = Set(secrets.map(\.trimmedName))
@@ -106,8 +106,15 @@ final class ProjectCenter {
             ProjectSecrets.remove(projectID: project.id, name: variable.name)
         }
 
-        registry = updated
-        model.projects = registry
+        do {
+            for variable in secrets where !variable.value.isEmpty {
+                try ProjectSecrets.set(variable.value, projectID: project.id, name: variable.trimmedName)
+            }
+        } catch {
+            // 登録は保存済み。もう一度「保存」すれば値だけ入れ直せる。
+            return ["登録は保存しましたが、秘密の値を保存できませんでした。\(error.localizedDescription)"]
+        }
+
         closeWindow()
         return []
     }
