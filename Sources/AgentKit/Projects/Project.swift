@@ -104,6 +104,11 @@ public struct ProjectEnvironment: Sendable, Equatable, Codable {
     /// 確認なしで操作が進む権限モード。設定画面で注意を出す。
     public static let unattendedPermissionModes: Set<String> = ["dontAsk", "bypassPermissions"]
 
+    /// 確認なしで操作が進む権限モードで起動するか。タスクを始める画面でも注意を出す。
+    public var runsWithoutApproval: Bool {
+        normalized().permissionMode.map(Self.unattendedPermissionModes.contains) ?? false
+    }
+
     /// 「許可するツール」の入力欄の文字列を分ける。カンマと改行で区切る（`Bash(git diff *)` のように空白を含むものがあるため、空白では区切らない）。
     public static func parseToolList(_ text: String) -> [String] {
         text.split(whereSeparator: { $0 == "," || $0 == "\n" })

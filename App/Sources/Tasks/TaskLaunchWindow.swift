@@ -147,6 +147,11 @@ private struct TaskLaunchView: View {
                 Text("作業フォルダ: \(ProjectPath.abbreviate(project.directory))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if project.environment.runsWithoutApproval, let mode = project.environment.normalized().permissionMode {
+                    Label("権限モード \(mode): ツールの実行が確認なしで進みます。ノッチに承認のお知らせは届きません。", systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
             }
             if claudePath == nil {
                 Label("claude コマンドが見つかっていません。メニューバーの「claude の場所を指定…」で指定してください。", systemImage: "exclamationmark.triangle")
@@ -159,9 +164,11 @@ private struct TaskLaunchView: View {
                     .foregroundStyle(.red)
             }
             HStack {
-                Text("承認が必要な操作は、ノッチに承認のお知らせが届きます。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if projects.first(where: { $0.id == projectID })?.environment.runsWithoutApproval != true {
+                    Text("承認が必要な操作は、ノッチに承認のお知らせが届きます。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button("キャンセル", role: .cancel, action: onCancel)
                     .keyboardShortcut(.cancelAction)

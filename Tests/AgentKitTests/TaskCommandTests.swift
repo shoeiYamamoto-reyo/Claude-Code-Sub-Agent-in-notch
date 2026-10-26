@@ -82,6 +82,45 @@ final class TaskCommandTests: XCTestCase {
         XCTAssertEqual(fallback, ["PATH": "/usr/bin"])
     }
 
+    func testEnvironmentAddsExecutableDirectoryToPath() {
+        func path(base: String?, login: String?, executable: String) -> String? {
+            TaskCommand.environment(
+                base: base.map { ["PATH": $0] } ?? [:],
+                loginShellPath: login,
+                project: ProjectEnvironment(),
+                secrets: [:],
+                executable: executable
+            )["PATH"]
+        }
+        // ログインシェルの PATH が取れなくても、claude の隣（npm で入れた node など）が見える。
+        XCTAssertEqual(path(base: "/usr/bin:/bin", login: nil, executable: "/Users/me/.nvm/versions/node/v22/bin/claude"),
+                       "/Users/me/.nvm/versions/node/v22/bin:/usr/bin:/bin")
+        // すでに入っていれば足さない。
+        XCTAssertEqual(path(base: "/usr/bin", login: "/opt/homebrew/bin:/usr/bin", executable: "/opt/homebrew/bin/claude"),
+                       "/opt/homebrew/bin:/usr/bin")
+        XCTAssertEqual(path(base: nil, login: nil, executable: "/opt/homebrew/bin/claude"), "/opt/homebrew/bin")
+    }
+
+    func testRunsWithoutApproval() {
+        XCTAssertTrue(ProjectEnvironment(permissionMode: "bypassPermissions").runsWithoutApproval)
+        XCTAssertTrue(ProjectEnvironment(permissionMode: " dontAsk ").runsWithoutApproval)
+        XCTAssertFalse(ProjectEnvironment(permissionMode: "acceptEdits").runsWithoutApproval)
+        XCTAssertFalse(ProjectEnvironment().runsWithoutApproval)
+    }
+
+    func testOutputRetention() {
+        let now = Date(timeIntervalSince1970: 100 * 24 * 60 * 60)
+        func file(_ name: String, daysAgo: Double) -> TaskOutputRetention.File {
+            TaskOutputRetention.File(path: "/tasks/\(name).jsonl", modifiedAt: now.addingTimeInterval(-daysAgo * 24 * 60 * 60))
+        }
+        let files = [file("old", daysAgo: 15), file("a", daysAgo: 1), file("b", daysAgo: 2), file("c", daysAgo: 3), file("d", daysAgo: 4)]
+        // 14 日より古いものと、新しい順で maxCount を超えたものを消す。
+        XCTAssertEqual(Set(TaskOutputRetention.filesToDelete(files, now: now, maxCount: 3)), ["/tasks/old.jsonl", "/tasks/d.jsonl"])
+        // 動いているタスクの出力は残す。
+        XCTAssertEqual(TaskOutputRetention.filesToDelete(files, now: now, keeping: ["/tasks/old.jsonl"], maxCount: 10), [])
+        XCTAssertEqual(TaskOutputRetention.filesToDelete([], now: now), [])
+    }
+
     func testDisplayName() {
         XCTAssertEqual(TaskCommand.displayName(for: "\n  Fix the build  \nmore"), "Fix the build")
         XCTAssertEqual(TaskCommand.displayName(for: String(repeating: "あ", count: 50), limit: 10), String(repeating: "あ", count: 9) + "…")

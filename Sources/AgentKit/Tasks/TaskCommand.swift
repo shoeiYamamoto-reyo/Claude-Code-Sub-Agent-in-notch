@@ -26,6 +26,8 @@ public struct TaskRequest: Sendable, Equatable {
 public enum TaskCommand {
     /// 停止のとき、SIGINT の後に SIGTERM を送るまで待つ時間。
     public static let interruptGracePeriod: TimeInterval = 5
+    /// SIGTERM の後に SIGKILL を送るまで待つ時間（応答しなくなった claude を残さない）。
+    public static let terminateGracePeriod: TimeInterval = 5
 
     ///
     /// 続き（`request.resume`）のときは `--session-id` の代わりに `--resume` を付ける（`--fork-session` は付けないので同じ ID のまま続く）。
@@ -59,15 +61,26 @@ public enum TaskCommand {
     /// 子プロセスの環境変数。アプリの環境に、ログインシェルの `PATH` とプロジェクトの変数を重ねる。
     ///
     /// - Parameter secrets: 秘密の変数の値（Keychain から読んだもの）。無いものは渡さない。
+    /// - Parameter executable: 起動する `claude` の場所。そのフォルダが `PATH` に無ければ前に足す
+    ///   （ログインシェルの `PATH` が取れなくても、npm で入れた claude が隣の `node` を見つけられるように）。
     public static func environment(
         base: [String: String],
         loginShellPath: String?,
         project: ProjectEnvironment,
-        secrets: [String: String]
+        secrets: [String: String],
+        executable: String? = nil
     ) -> [String: String] {
         var result = base
         if let loginShellPath, !loginShellPath.isEmpty {
             result["PATH"] = loginShellPath
+        }
+        if let executable {
+            let directory = (executable as NSString).deletingLastPathComponent
+            let path = result["PATH"] ?? ""
+            let entries = path.split(separator: ":").map(String.init)
+            if !directory.isEmpty, !entries.contains(directory) {
+                result["PATH"] = path.isEmpty ? directory : directory + ":" + path
+            }
         }
         // 親が Claude Code の中で動いていると、子の claude が入れ子のセッションと判断して起動を断ることがある。
         result.removeValue(forKey: "CLAUDECODE")
