@@ -80,7 +80,11 @@ private struct IslandContent: View {
                 switch tab {
                 case .sessions:
                     if !model.tasks.isEmpty {
-                        TaskRunListView(tasks: model.tasks, onStop: { model.onStopTask?($0) })
+                        TaskRunListView(
+                            tasks: model.tasks,
+                            onStop: { model.onStopTask?($0) },
+                            onShow: { model.onShowTask?($0) }
+                        )
                     }
                     SessionListView(
                         sessions: model.sessions,

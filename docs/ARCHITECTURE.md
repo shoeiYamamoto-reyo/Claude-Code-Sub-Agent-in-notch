@@ -126,6 +126,15 @@ public enum ClaudeLocator {                      // 設定値 → ログイン�
 }
 // 子プロセスの管理はアプリの TaskRunner（@MainActor クラス、Process を使う）。
 
+// M3-4 で実装。stream-json の 1 行 → StreamJSONEvent、流し込んで TaskTranscript
+// （最後の応答・成功した編集で変わったファイル・result）。LineBuffer で読み取りのチャンクを行に分ける。
+public struct TaskTranscript: Sendable, Equatable {
+    public mutating func consume(_ line: some StringProtocol)
+    public var lastAssistantText: String? { get }   // メインの会話だけ（サブエージェントの応答は含めない）
+    public var changedFiles: [String] { get }       // Edit / MultiEdit / Write / NotebookEdit の成功分
+    public var result: TaskResult? { get }
+}
+
 // M3-2 で実装（Sources/AgentKit/Agents/）。読み取りのみ。書き出し（未知のフィールドを保つ往復）は M4-1。
 public struct AgentDefinition: Sendable, Equatable {
     public var name: String

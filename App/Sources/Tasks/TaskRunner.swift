@@ -32,8 +32,10 @@ struct TaskRun: Identifiable, Equatable {
     let startedAt: Date
     var endedAt: Date?
     var state: State
-    /// stream-json の出力を書いたファイル（結果の表示は M3-4）。
+    /// stream-json の出力を書いたファイル。
     let outputPath: String
+    /// 出力を読みながらまとめた結果（M3-4）。
+    var transcript = TaskTranscript()
 
     var isActive: Bool { state == .running || state == .stopping }
 
@@ -44,8 +46,8 @@ struct TaskRun: Identifiable, Equatable {
 /// `claude -p` を子プロセスで起動・停止する（ROADMAP 3-3、ADR-0002）。
 ///
 /// - コマンドと環境変数の組み立ては `TaskCommand`（AgentKit）。指示文は標準入力で渡す。
-/// - 出力は読み捨てずに `~/Library/Application Support/NotchAgent/tasks/<session-id>.jsonl` に書く
-///   （パイプを詰まらせないため。表示は M3-4）。標準エラーは最後の数 KB だけ覚えてエラー表示に使う。
+/// - 出力は `~/Library/Application Support/NotchAgent/tasks/<session-id>.jsonl` に書きながら、
+///   行ごとに `TaskTranscript`（AgentKit）でまとめる（最後の応答、変更ファイル、コスト。M3-4）。標準エラーは最後の数 KB だけ覚えてエラー表示に使う。
 /// - 停止は SIGINT（ターンを終わらせて記録を残す）→ 5 秒で終わらなければ SIGTERM。
 /// - アプリの終了時は動いているタスクに SIGTERM を送る（待たない）。
 @MainActor
@@ -114,12 +116,27 @@ final class TaskRunner {
         )
         process.currentDirectoryURL = URL(fileURLWithPath: project.directory, isDirectory: true)
         let input = Pipe()
+        let stdout = Pipe()
         let errors = Pipe()
         process.standardInput = input
-        process.standardOutput = output
+        process.standardOutput = stdout
         process.standardError = errors
 
         let id = request.sessionID
+        // 出力はそのままファイルに書き、行ごとに MainActor で結果にまとめる。
+        let reader = TaskOutputReader(file: output)
+        stdout.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            let lines: [String]
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+                lines = reader.finish()
+            } else {
+                lines = reader.append(data)
+            }
+            guard !lines.isEmpty else { return }
+            Task { @MainActor in self?.consume(id, lines: lines) }
+        }
         let tail = StderrTail()
         errors.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
@@ -138,11 +155,11 @@ final class TaskRunner {
         do {
             try process.run()
         } catch {
-            try? output.close()
+            _ = reader.finish()
+            stdout.fileHandleForReading.readabilityHandler = nil
             errors.fileHandleForReading.readabilityHandler = nil
             return "claude を起動できませんでした: \(error.localizedDescription)"
         }
-        try? output.close()
 
         // 指示文を渡して閉じる。大きくても詰まらないよう別スレッドで書く。
         let prompt = Data(request.prompt.utf8)
@@ -209,6 +226,12 @@ final class TaskRunner {
         }
     }
 
+    private func consume(_ id: UUID, lines: [String]) {
+        update(id) { run in
+            for line in lines { run.transcript.consume(line) }
+        }
+    }
+
     private func update(_ id: UUID, _ change: (inout TaskRun) -> Void) {
         guard let index = model.tasks.firstIndex(where: { $0.id == id }) else { return }
         change(&model.tasks[index])
@@ -221,6 +244,36 @@ final class TaskRunner {
             finishedCount += 1
             return finishedCount > Self.keepFinished
         }
+    }
+}
+
+/// 標準出力をファイルに書きながら行に分ける（読み取りのスレッドから呼ばれる）。
+private final class TaskOutputReader: @unchecked Sendable {
+    private let lock = NSLock()
+    private let file: FileHandle
+    private var buffer = LineBuffer()
+    private var isFinished = false
+
+    init(file: FileHandle) {
+        self.file = file
+    }
+
+    func append(_ data: Data) -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isFinished else { return [] }
+        try? file.write(contentsOf: data)
+        return buffer.append(data)
+    }
+
+    /// 出力の終わり。残りの行を返してファイルを閉じる。
+    func finish() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isFinished else { return [] }
+        isFinished = true
+        try? file.close()
+        return buffer.flush().map { [$0] } ?? []
     }
 }
 
