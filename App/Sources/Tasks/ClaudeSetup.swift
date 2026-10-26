@@ -5,7 +5,8 @@ import Foundation
 /// `claude` コマンドの場所とログインシェルの `PATH`（F6-3、ADR-0002）。
 ///
 /// メニューバーのアプリは Finder から起動されるので、`PATH` がターミナルと違う（`~/.local/bin` などが無い）。
-/// 起動時に一度だけログインシェルで `PATH` と `command -v claude` を調べ、タスクの起動に使う。
+/// 起動時にログインシェルで `PATH` と `command -v claude` を調べ、タスクの起動に使う。
+/// 時間切れなどで取れなければ、メニューから調べ直せる。
 @MainActor
 final class ClaudeSetup {
     private static let configuredPathKey = "claudePath"
@@ -32,16 +33,26 @@ final class ClaudeSetup {
         ClaudeLocator.locate(configured: configuredPath, probed: probedClaude, home: NSHomeDirectory())
     }
 
+    /// ログインシェルを調べる。起動時と、メニューの「ログインシェルを調べ直す」から呼ぶ。
     func start() {
         refreshStatus()
+        guard !isProbing else { return }
+        isProbing = true
         let shell = ProcessInfo.processInfo.environment["SHELL"].flatMap { $0.isEmpty ? nil : $0 } ?? "/bin/zsh"
         Task {
             let result = await Self.probe(shell: shell)
-            loginShellPath = result?.path
-            probedClaude = result?.claude
+            isProbing = false
+            // 失敗したときは前に取れた値を残す（調べ直しで失敗しても悪くならないように）。
+            if let result {
+                loginShellPath = result.path
+                probedClaude = result.claude
+            }
+            model.loginShellProbeFailed = result?.path == nil
             refreshStatus()
         }
     }
+
+    private var isProbing = false
 
     /// ファイルを選んで `claude` の場所を指定する。
     func chooseExecutable() {
@@ -76,20 +87,22 @@ final class ClaudeSetup {
             process.standardOutput = output
             process.standardError = FileHandle.nullDevice
             let once = ResumeOnce(continuation)
-            let reader = output.fileHandleForReading
-            process.terminationHandler = { _ in
-                let data = reader.readDataToEndOfFile()
-                once.resume(ClaudeLocator.parseProbe(String(decoding: data, as: UTF8.self)))
-            }
             do {
                 try process.run()
             } catch {
                 once.resume(nil)
                 return
             }
+            // 終わるのを待たずに読み続ける（rc ファイルの出力が多くてもパイプが詰まらないように）。
+            let reader = output.fileHandleForReading
+            DispatchQueue.global().async {
+                let data = reader.readDataToEndOfFile()
+                once.resume(ClaudeLocator.parseProbe(String(decoding: data, as: UTF8.self)))
+            }
             let running = UncheckedProcess(process)
             DispatchQueue.global().asyncAfter(deadline: .now() + probeTimeout) {
-                if running.process.isRunning { running.process.terminate() }
+                // 対話シェル（-i）は SIGTERM を無視するので SIGKILL で終わらせる。
+                if running.process.isRunning { kill(running.process.processIdentifier, SIGKILL) }
                 once.resume(nil)
             }
         }

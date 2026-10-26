@@ -110,6 +110,12 @@ struct QuickTaskBar: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .lineLimit(2)
+            } else if let project = selectedProject, project.environment.runsWithoutApproval,
+                      let mode = project.environment.normalized().permissionMode {
+                Label("権限モード \(mode): 確認なしで実行されます（承認のお知らせは届きません）", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
             }
         }
         .onAppear(perform: prepare)

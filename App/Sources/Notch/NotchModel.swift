@@ -59,6 +59,8 @@ final class NotchModel {
     var tasks: [TaskRun] = []
     /// 見つかった `claude` の場所。nil なら未検出。
     var claudePath: String?
+    /// ログインシェルの `PATH` を取れなかった（時間切れなど）。メニューから調べ直せる。
+    var loginShellProbeFailed = false
     /// 「タスクを開始…」（`TaskLauncher.open`）。プロジェクトを決めて開くときはその ID。
     @ObservationIgnored var onStartTask: ((Project.ID?) -> Void)?
     /// 実行中のタスクの「停止」（`TaskRunner.stop`）。

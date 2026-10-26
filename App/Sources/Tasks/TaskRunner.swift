@@ -52,8 +52,10 @@ struct TaskRun: Identifiable, Equatable {
 /// - 出力は `~/Library/Application Support/NotchAgent/tasks/<session-id>.jsonl` に書きながら、
 ///   行ごとに `TaskTranscript`（AgentKit）でまとめる（最後の応答、変更ファイル、コスト。M3-4）。標準エラーは最後の数 KB だけ覚えてエラー表示に使う。
 /// - 終わったタスクは、追加の指示で同じセッションを続けられる（`--resume`、ROADMAP 3-6）。一覧の行と出力ファイルは同じものを使い続ける。
-/// - 停止は SIGINT（ターンを終わらせて記録を残す）→ 5 秒で終わらなければ SIGTERM。
+/// - 停止は SIGINT（ターンを終わらせて記録を残す）→ 5 秒で終わらなければ SIGTERM → さらに 5 秒で SIGKILL。
+///   シグナルは子のプロセスグループに送る（Bash ツールから起動したものも残さない）。
 /// - アプリの終了時は動いているタスクに SIGTERM を送る（待たない）。
+/// - 出力ファイルは起動時に古いものを消す（`TaskOutputRetention`）。
 @MainActor
 final class TaskRunner {
     let model: NotchModel
@@ -73,6 +75,7 @@ final class TaskRunner {
             guard let self else { return "続けられません。" }
             return self.continueTask(id, prompt: prompt)
         }
+        Self.removeOldOutputs()
     }
 
     static var outputDirectory: URL {
@@ -148,9 +151,9 @@ final class TaskRunner {
 
         let outputURL = Self.outputURL(for: request.sessionID)
         let output: FileHandle
+        let append = request.resume && FileManager.default.fileExists(atPath: outputURL.path)
         do {
             try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
-            let append = request.resume && FileManager.default.fileExists(atPath: outputURL.path)
             if !append {
                 guard FileManager.default.createFile(atPath: outputURL.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
                     return "出力ファイルを作れませんでした: \(outputURL.path)"
@@ -173,7 +176,8 @@ final class TaskRunner {
             base: ProcessInfo.processInfo.environment,
             loginShellPath: claude.loginShellPath,
             project: project.environment,
-            secrets: secrets
+            secrets: secrets,
+            executable: executable
         )
         process.currentDirectoryURL = URL(fileURLWithPath: project.directory, isDirectory: true)
         let input = Pipe()
@@ -203,11 +207,15 @@ final class TaskRunner {
             let data = handle.availableData
             if data.isEmpty {
                 handle.readabilityHandler = nil
+                tail.markClosed()
             } else {
                 tail.append(data)
             }
         }
         process.terminationHandler = { [weak self] process in
+            // 終了の通知が標準エラーの最後の読み取りより先に来ることがあるので、読み終わるまで少し待つ
+            // （すぐ失敗したときほど、エラーの文面が抜けやすい）。
+            tail.waitUntilClosed(timeout: 1)
             let status = process.terminationStatus
             let signaled = process.terminationReason == .uncaughtSignal
             Task { @MainActor in self?.finished(id, status: status, signaled: signaled) }
@@ -219,6 +227,8 @@ final class TaskRunner {
             _ = reader.finish()
             stdout.fileHandleForReading.readabilityHandler = nil
             errors.fileHandleForReading.readabilityHandler = nil
+            // 新しく作った空のファイルだけ消す（続きなら、それまでの出力を残す）。
+            if !append { try? FileManager.default.removeItem(at: outputURL) }
             return "claude を起動できませんでした: \(error.localizedDescription)"
         }
 
@@ -239,24 +249,56 @@ final class TaskRunner {
 
     func stop(_ id: UUID) {
         guard let process = processes[id], process.isRunning else { return }
-        process.interrupt()
+        Self.send(SIGINT, to: process)
         update(id) { $0.state = .stopping }
         stopTimers[id]?.cancel()
         stopTimers[id] = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(TaskCommand.interruptGracePeriod))
-            guard !Task.isCancelled, let self, let process = self.processes[id], process.isRunning else { return }
-            process.terminate()
+            // SIGINT → SIGTERM → SIGKILL。応答しなくなっていても「停止中」のまま残さない。
+            for (signal, wait) in [(SIGTERM, TaskCommand.interruptGracePeriod), (SIGKILL, TaskCommand.terminateGracePeriod)] {
+                try? await Task.sleep(for: .seconds(wait))
+                guard !Task.isCancelled, let process = self?.processes[id], process.isRunning else { return }
+                Self.send(signal, to: process)
+            }
         }
     }
 
     /// アプリの終了時。待たずに SIGTERM を送る（hook の SessionEnd は claude 側が走らせる）。
     func terminateAll() {
         for process in processes.values where process.isRunning {
-            process.terminate()
+            Self.send(SIGTERM, to: process)
         }
     }
 
     // MARK: - 内部
+
+    /// 子のプロセスグループにシグナルを送る。`Process` は子を新しいグループの先頭にするので、
+    /// claude が起動した孫にも届く。グループを持っていなければ子だけに送る。
+    private static func send(_ signal: Int32, to process: Process) {
+        let pid = process.processIdentifier
+        guard pid > 0 else { return }
+        if getpgid(pid) == pid {
+            killpg(pid, signal)
+        } else {
+            kill(pid, signal)
+        }
+    }
+
+    /// 古い出力ファイルを消す（`TaskOutputRetention`）。起動時、まだタスクが無いうちに別スレッドで行う。
+    private static func removeOldOutputs() {
+        let directory = outputDirectory
+        Task.detached(priority: .utility) {
+            let manager = FileManager.default
+            guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return }
+            let files = names.filter { $0.hasSuffix(".jsonl") }.compactMap { name -> TaskOutputRetention.File? in
+                let path = directory.appendingPathComponent(name).path
+                guard let modified = (try? manager.attributesOfItem(atPath: path))?[.modificationDate] as? Date else { return nil }
+                return TaskOutputRetention.File(path: path, modifiedAt: modified)
+            }
+            for path in TaskOutputRetention.filesToDelete(files, now: Date()) {
+                try? manager.removeItem(atPath: path)
+            }
+        }
+    }
 
     private func finished(_ id: UUID, status: Int32, signaled: Bool) {
         processes[id] = nil
@@ -332,12 +374,23 @@ private final class StderrTail: @unchecked Sendable {
     private let lock = NSLock()
     private var data = Data()
     private let limit = 4096
+    private let closed = DispatchSemaphore(value: 0)
 
     func append(_ chunk: Data) {
         lock.lock()
         defer { lock.unlock() }
         data.append(chunk)
         if data.count > limit { data = data.suffix(limit) }
+    }
+
+    /// 標準エラーを最後まで読んだ（EOF）。
+    func markClosed() {
+        closed.signal()
+    }
+
+    /// EOF まで待つ。孫プロセスが標準エラーを開いたままのこともあるので、待つのは `timeout` 秒まで。
+    func waitUntilClosed(timeout: TimeInterval) {
+        if closed.wait(timeout: .now() + timeout) == .success { closed.signal() }
     }
 
     var text: String {

@@ -105,6 +105,12 @@ private struct MenuContent: View {
                 claudeSetup.resetConfiguredPath()
             }
         }
+        if model.loginShellProbeFailed {
+            Text("ログインシェルの PATH を取得できませんでした")
+            Button("ログインシェルを調べ直す") {
+                claudeSetup.start()
+            }
+        }
         Divider()
         Button("プロジェクトを追加…") {
             projectCenter.beginAdd()
