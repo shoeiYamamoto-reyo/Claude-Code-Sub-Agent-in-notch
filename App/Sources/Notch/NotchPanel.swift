@@ -24,9 +24,11 @@ final class NotchPanel: NSPanel {
         return panel
     }
 
-    // 入力欄を置くまではキーウィンドウにならない（クリックでターミナルからフォーカスを奪わない）。
-    // M3 のタスク投入 UI で見直す。
-    override var canBecomeKey: Bool { false }
+    /// クイック入力の間だけキーウィンドウになれる（ROADMAP 3-5）。
+    /// それ以外のときはクリックしてもターミナルなどからキー入力を奪わない。
+    var acceptsKeyInput = false
+
+    override var canBecomeKey: Bool { acceptsKeyInput }
     override var canBecomeMain: Bool { false }
 
     /// メニューバーの領域に置けるように、システムによる位置の補正をしない。

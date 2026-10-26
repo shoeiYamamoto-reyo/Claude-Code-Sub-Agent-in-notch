@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var taskRunner = TaskRunner(model: model, claude: claudeSetup)
     lazy var taskLauncher = TaskLauncher(model: model, runner: taskRunner)
     lazy var taskResultViewer = TaskResultViewer(model: model)
+    let quickInputHotKey = QuickInputHotKey()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
@@ -46,6 +47,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = taskLauncher
         _ = taskResultViewer
         model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }
+        model.onBeginQuickInput = { [weak self] in self?.controller.beginQuickInput() }
+        model.onEndQuickInput = { [weak self] in self?.controller.endQuickInput(collapse: true) }
+        quickInputHotKey.onPress = { [weak self] in
+            guard let self else { return }
+            // プロジェクトが無ければ、先に登録してもらう。
+            if self.model.projects.projects.isEmpty {
+                self.projectCenter.beginAdd()
+            } else {
+                self.controller.beginQuickInput()
+            }
+        }
+        quickInputHotKey.register()
+        model.quickInputShortcut = quickInputHotKey.isRegistered ? QuickInputHotKey.displayName : nil
     }
 
     func applicationWillTerminate(_ notification: Notification) {

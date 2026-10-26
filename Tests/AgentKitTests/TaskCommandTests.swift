@@ -105,4 +105,18 @@ final class ClaudeLocatorTests: XCTestCase {
         )
         XCTAssertNil(ClaudeLocator.locate(configured: nil, probed: nil, home: "/Users/me", isExecutable: { _ in false }))
     }
+
+    func testQuickTaskDefaultProject() throws {
+        let home = "/Users/me"
+        var registry = ProjectRegistry()
+        let app = try registry.upsert(Project(name: "App", directory: "/Users/me/src/app", createdAt: Date(timeIntervalSince1970: 0)), home: home)
+        let docs = try registry.upsert(Project(name: "Docs", directory: "/Users/me/docs", createdAt: Date(timeIntervalSince1970: 1)), home: home)
+
+        XCTAssertEqual(QuickTaskDefaults.project(in: registry, lastUsed: docs.id, activeDirectories: ["/Users/me/src/app"])?.id, docs.id)
+        // 最後に使ったプロジェクトが消えていれば、動いているセッションから選ぶ。
+        XCTAssertEqual(QuickTaskDefaults.project(in: registry, lastUsed: UUID(), activeDirectories: ["/tmp", "/Users/me/docs/guide"])?.id, docs.id)
+        // どれにも当たらなければ先頭（登録順）。
+        XCTAssertEqual(QuickTaskDefaults.project(in: registry, lastUsed: nil, activeDirectories: ["/tmp"])?.id, app.id)
+        XCTAssertNil(QuickTaskDefaults.project(in: ProjectRegistry(), lastUsed: docs.id, activeDirectories: []))
+    }
 }

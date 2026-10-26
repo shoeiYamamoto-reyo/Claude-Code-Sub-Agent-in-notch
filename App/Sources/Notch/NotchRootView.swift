@@ -76,6 +76,10 @@ private struct IslandContent: View {
                         .foregroundStyle(.orange)
                         .lineLimit(1)
                 }
+                // 承認カードが出ている間は場所を譲る（入力中は出したまま）。
+                if model.isQuickInputActive || (model.approvals.isEmpty && !model.projects.projects.isEmpty && model.projectLoadError == nil) {
+                    QuickTaskBar(model: model)
+                }
                 ExpandedTabBar(selection: $tab)
                 switch tab {
                 case .sessions:

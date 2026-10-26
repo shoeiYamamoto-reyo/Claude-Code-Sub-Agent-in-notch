@@ -111,6 +111,54 @@ final class NotchPresentationTests: XCTestCase {
         XCTAssertEqual(machine.state, .character)
     }
 
+    func testPinExpandsImmediatelyAndIgnoresLeaving() {
+        var machine = NotchPresentationMachine()
+        machine.pin()
+        XCTAssertEqual(machine.state, .expanded)
+        XCTAssertNil(machine.nextDeadline)
+        machine.mouseEntered(at: at(0))
+        machine.mouseExited(at: at(1))
+        XCTAssertNil(machine.nextDeadline)
+        machine.tick(at: at(5))
+        XCTAssertEqual(machine.state, .expanded)
+    }
+
+    func testPinCancelsPendingCollapse() {
+        var machine = expanded()
+        machine.mouseExited(at: at(1))
+        XCTAssertNotNil(machine.nextDeadline)
+        machine.pin()
+        XCTAssertNil(machine.nextDeadline)
+        machine.tick(at: at(5))
+        XCTAssertEqual(machine.state, .expanded)
+    }
+
+    func testUnpinCollapsesOnlyWhenNotHovering() {
+        var machine = NotchPresentationMachine()
+        machine.pin()
+        machine.setNotice(true, at: at(0))
+        machine.unpin(at: at(1))
+        XCTAssertEqual(machine.nextDeadline, at(1.6))
+        machine.tick(at: at(1.6))
+        XCTAssertEqual(machine.state, .peek)
+
+        var hovering = expanded()
+        hovering.pin()
+        hovering.unpin(at: at(1))
+        XCTAssertNil(hovering.nextDeadline)
+        XCTAssertEqual(hovering.state, .expanded)
+        hovering.unpin(at: at(2))  // 留めていなければ何もしない
+        XCTAssertNil(hovering.nextDeadline)
+    }
+
+    func testCollapseReleasesPin() {
+        var machine = NotchPresentationMachine()
+        machine.pin()
+        machine.collapse()
+        XCTAssertFalse(machine.isPinned)
+        XCTAssertEqual(machine.state, .character)
+    }
+
     private func expanded() -> NotchPresentationMachine {
         var machine = NotchPresentationMachine()
         machine.mouseEntered(at: at(0))

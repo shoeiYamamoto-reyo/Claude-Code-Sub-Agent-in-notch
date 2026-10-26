@@ -2,11 +2,11 @@ import AgentKit
 import AppKit
 import SwiftUI
 
-/// タスクを始めるウインドウ（ROADMAP 3-3 の確認用の最小限。ノッチから素早く入力する UI は 3-5）。
-///
-/// ノッチのパネルはキー入力を受けないので、指示は普通のウインドウで入力する。
+/// タスクを始める（ROADMAP 3-3、3-5）。ノッチのクイック入力（`QuickTaskBar`）と、長い指示を書くためのウインドウの両方から使う。
 @MainActor
 final class TaskLauncher {
+    private static let lastProjectKey = "lastTaskProjectID"
+
     let model: NotchModel
     private let runner: TaskRunner
     private var window: NSWindow?
@@ -15,6 +15,11 @@ final class TaskLauncher {
         self.model = model
         self.runner = runner
         model.onStartTask = { [weak self] projectID in self?.open(projectID: projectID) }
+        model.onQuickStart = { [weak self] projectID, agent, prompt in
+            guard let self else { return "タスクを始められません。" }
+            return self.start(projectID: projectID, agent: agent, prompt: prompt)
+        }
+        model.lastTaskProjectID = UserDefaults.standard.string(forKey: Self.lastProjectKey).flatMap(UUID.init(uuidString:))
     }
 
     func open(projectID: Project.ID? = nil) {
@@ -27,7 +32,14 @@ final class TaskLauncher {
             alert.runModal()
             return
         }
-        let selected = projectID.flatMap { id in projects.first { $0.id == id } } ?? projects[0]
+        // 決めずに開いたときは、ノッチのクイック入力と同じ既定値にする。
+        let selected = projectID.flatMap { id in projects.first { $0.id == id } }
+            ?? QuickTaskDefaults.project(
+                in: model.projects,
+                lastUsed: model.lastTaskProjectID,
+                activeDirectories: model.sessions.filter(\.isActive).compactMap(\.cwd)
+            )
+            ?? projects[0]
         let view = TaskLaunchView(
             projects: projects,
             initialProjectID: selected.id,
@@ -37,7 +49,10 @@ final class TaskLauncher {
             },
             onCancel: { [weak self] in self?.close() },
             onStart: { [weak self] projectID, agent, prompt in
-                self?.start(projectID: projectID, agent: agent, prompt: prompt)
+                guard let self else { return nil }
+                let problem = self.start(projectID: projectID, agent: agent, prompt: prompt)
+                if problem == nil { self.close() }
+                return problem
             }
         )
         close()
@@ -56,8 +71,8 @@ final class TaskLauncher {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// 始められなければ理由を返す（ウインドウは開いたまま）。
-    private func start(projectID: Project.ID, agent: String?, prompt: String) -> String? {
+    /// 始められなければ理由を返す。
+    func start(projectID: Project.ID, agent: String?, prompt: String) -> String? {
         guard let project = model.projects.project(id: projectID) else { return "プロジェクトが見つかりません。" }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "指示を入力してください。" }
@@ -68,7 +83,8 @@ final class TaskLauncher {
         if let error = runner.start(TaskRequest(projectID: project.id, agent: agent, prompt: trimmed), project: project) {
             return error
         }
-        close()
+        model.lastTaskProjectID = project.id
+        UserDefaults.standard.set(project.id.uuidString, forKey: Self.lastProjectKey)
         return nil
     }
 
