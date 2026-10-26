@@ -36,7 +36,7 @@ claude -p "<指示>"
 - 続きの指示（F2-4）: `claude -p "<追加の指示>" --resume <session-id> --output-format stream-json --verbose`。`-p` で再開すると権限モードは復元されないので、元の起動と同じオプションを付け直す。
 - 停止（F2-2）: まず **SIGINT**（ターンを終わらせて記録を残す）。5 秒待って終わらなければ SIGTERM（exit 143）。
 - `claude` の場所（F6-3）: 設定値 → ログインシェルでの `command -v claude` → よくある場所（`~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`）の順に探す。
-- コマンドの組み立てと stream-json のデコードは `AgentKit`（`TaskCommandBuilder`, `StreamJSONEvent`）に置いて Linux でテストする。子プロセスの管理はアプリ側。
+- コマンドの組み立てと stream-json のデコードは `AgentKit`（`TaskCommand`, `StreamJSONEvent` / `TaskTranscript`）に置いて Linux でテストする。子プロセスの管理はアプリ側。
 
 ## 確認が残っていること（`docs/claude-code-spec.md`）
 - U2: `-p` タスクの `PermissionRequest` をノッチから許可して続行できるか（M3-3）。

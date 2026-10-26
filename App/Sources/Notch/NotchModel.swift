@@ -63,6 +63,8 @@ final class NotchModel {
     @ObservationIgnored var onStartTask: ((Project.ID?) -> Void)?
     /// 実行中のタスクの「停止」（`TaskRunner.stop`）。
     @ObservationIgnored var onStopTask: ((UUID) -> Void)?
+    /// タスクの行を押したとき（`TaskResultViewer.show`）。
+    @ObservationIgnored var onShowTask: ((UUID) -> Void)?
 }
 
 enum ReceiverStatus: Equatable {

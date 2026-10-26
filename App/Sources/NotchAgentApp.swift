@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var claudeSetup = ClaudeSetup(model: model)
     lazy var taskRunner = TaskRunner(model: model, claude: claudeSetup)
     lazy var taskLauncher = TaskLauncher(model: model, runner: taskRunner)
+    lazy var taskResultViewer = TaskResultViewer(model: model)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
@@ -43,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = agentLibrary
         claudeSetup.start()
         _ = taskLauncher
+        _ = taskResultViewer
         model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }
     }
 

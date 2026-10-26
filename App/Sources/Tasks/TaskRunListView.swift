@@ -6,6 +6,8 @@ import SwiftUI
 struct TaskRunListView: View {
     let tasks: [TaskRun]
     let onStop: (UUID) -> Void
+    /// 行を押したとき（結果のウインドウ）。
+    let onShow: (UUID) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -13,7 +15,7 @@ struct TaskRunListView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.6))
             ForEach(visibleTasks) { task in
-                TaskRunRow(task: task) { onStop(task.id) }
+                TaskRunRow(task: task, onStop: { onStop(task.id) }, onShow: { onShow(task.id) })
             }
         }
     }
@@ -27,24 +29,32 @@ struct TaskRunListView: View {
 private struct TaskRunRow: View {
     let task: TaskRun
     let onStop: () -> Void
+    let onShow: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-            Text(task.state.displayName)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(color)
-                .frame(minWidth: 40, alignment: .leading)
-            Text(title)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-            Text(detail)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.55))
-                .lineLimit(1)
-            Spacer(minLength: 4)
+            Button(action: onShow) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 7, height: 7)
+                    Text(TaskResultSummary.stateText(task))
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(color)
+                        .frame(minWidth: 40, alignment: .leading)
+                    Text(title)
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                    Text(TaskResultSummary.oneLine(task))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("結果を見る")
             if task.state == .running {
                 Button("停止", action: onStop)
                     .buttonStyle(CardButtonStyle(tint: .red))
@@ -57,14 +67,8 @@ private struct TaskRunRow: View {
         [task.projectName, task.agent].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private var detail: String {
-        if case .failed(let message) = task.state {
-            return ToolSummary.oneLine(message) ?? message
-        }
-        return TaskCommand.displayName(for: task.prompt)
-    }
-
     private var color: Color {
+        if TaskResultSummary.isError(task) { return .red }
         switch task.state {
         case .running: .blue
         case .stopping: .orange
