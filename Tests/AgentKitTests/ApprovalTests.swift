@@ -299,6 +299,26 @@ final class ApprovalQueueTests: XCTestCase {
         XCTAssertNil(queue.remove(id: 1, at: t0 + 2))
     }
 
+    func testShortcutsOnlyForPermissionCards() {
+        XCTAssertEqual(ApprovalShortcut.available(for: nil), [])
+        XCTAssertEqual(ApprovalShortcut.available(for: permission(id: 1)), [.allow, .deny, .terminal])
+
+        var always = permission(id: 2)
+        always.kind = .permission(toolName: "Bash", summary: nil, detail: nil, alwaysAllow: "Bash(ls) をこのセッションに追加")
+        XCTAssertEqual(ApprovalShortcut.available(for: always), [.allow, .deny, .alwaysAllow, .terminal])
+
+        var question = permission(id: 3)
+        question.kind = .question([AskQuestion(question: "Q", header: nil, options: [.init(label: "A")], multiSelect: false)])
+        XCTAssertEqual(ApprovalShortcut.available(for: question), [])
+
+        XCTAssertEqual(ApprovalShortcut.allow.reply, HookReply(decision: .allow))
+        XCTAssertEqual(ApprovalShortcut.deny.reply, HookReply(decision: .deny))
+        XCTAssertEqual(ApprovalShortcut.alwaysAllow.reply, HookReply(decision: .always))
+        XCTAssertEqual(ApprovalShortcut.terminal.reply, .pass)
+        XCTAssertEqual(Set(ApprovalShortcut.allCases.map(\.key)).count, ApprovalShortcut.allCases.count)
+        XCTAssertEqual(ApprovalShortcut.allow.label, "⌥⌘Y")
+    }
+
     func testRequestsSettledByHookEvents() throws {
         var queue = ApprovalQueue()
         _ = queue.enqueue(permission(id: 1, command: "ls"), at: t0)

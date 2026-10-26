@@ -17,12 +17,14 @@ final class HookCenter {
     private var approvals = ApprovalQueue()
     private var wakeTask: Task<Void, Never>?
     private let capture = EventCapture()
+    private let hotKeys = ApprovalHotKeys()
 
     init(model: NotchModel, controller: NotchPanelController) {
         self.model = model
         self.controller = controller
         model.isCapturingEvents = capture.isEnabled
         model.onApprovalReply = { [weak self] id, reply in self?.respond(to: id, with: reply) }
+        hotKeys.onPress = { [weak self] shortcut in self?.respondToShortcut(shortcut) }
     }
 
     static var socketPath: String { HookBridge.socketPath(home: NSHomeDirectory()) }
@@ -81,6 +83,12 @@ final class HookCenter {
         refresh(now: now)
     }
 
+    /// ショートカットが押された。答える先は今表示しているカード（クリックと同じ判定を通る）。
+    private func respondToShortcut(_ shortcut: ApprovalShortcut) {
+        guard let current = approvals.current, ApprovalShortcut.available(for: current).contains(shortcut) else { return }
+        respond(to: current.id, with: shortcut.reply)
+    }
+
     // MARK: - 受信
 
     private func receive(_ message: HookWireMessage) {
@@ -127,6 +135,7 @@ final class HookCenter {
         let sessions = store.sessions
         if model.sessions != sessions { model.sessions = sessions }
         if model.approvals != approvals.requests { model.approvals = approvals.requests }
+        hotKeys.update(ApprovalShortcut.available(for: approvals.current))
 
         let mood: CharacterMood = approvals.isEmpty ? store.mood(now: now) : .waiting
         if model.mood != mood { controller.setMood(mood) }
