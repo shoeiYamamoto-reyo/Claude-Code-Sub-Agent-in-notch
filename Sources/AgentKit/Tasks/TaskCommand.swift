@@ -8,12 +8,15 @@ public struct TaskRequest: Sendable, Equatable {
     public var prompt: String
     /// `--session-id` に渡す ID。hook のイベントと結び付けるため、アプリが決める。
     public var sessionID: UUID
+    /// 前に始めたセッション `sessionID` の続きにするか（`--resume`、ROADMAP 3-6、F2-4）。
+    public var resume: Bool
 
-    public init(projectID: UUID, agent: String?, prompt: String, sessionID: UUID = UUID()) {
+    public init(projectID: UUID, agent: String?, prompt: String, sessionID: UUID = UUID(), resume: Bool = false) {
         self.projectID = projectID
         self.agent = agent
         self.prompt = prompt
         self.sessionID = sessionID
+        self.resume = resume
     }
 }
 
@@ -24,6 +27,10 @@ public enum TaskCommand {
     /// 停止のとき、SIGINT の後に SIGTERM を送るまで待つ時間。
     public static let interruptGracePeriod: TimeInterval = 5
 
+    ///
+    /// 続き（`request.resume`）のときは `--session-id` の代わりに `--resume` を付ける（`--fork-session` は付けないので同じ ID のまま続く）。
+    /// `-p` で再開すると権限モードなどは引き継がれないので、エージェントとプロジェクトの環境は毎回付け直す（ADR-0002）。
+    /// 名前は最初に付けたものを残すため、続きのときは付けない。
     public static func arguments(for request: TaskRequest, environment: ProjectEnvironment, name: String? = nil) -> [String] {
         let environment = environment.normalized()
         var arguments = [
@@ -31,7 +38,7 @@ public enum TaskCommand {
             "--output-format", "stream-json",
             // stream-json と -p の組み合わせでは必須（docs/claude-code-spec.md 5 章）。
             "--verbose",
-            "--session-id", request.sessionID.uuidString.lowercased(),
+            request.resume ? "--resume" : "--session-id", request.sessionID.uuidString.lowercased(),
         ]
         if let agent = request.agent?.trimmingCharacters(in: .whitespaces), !agent.isEmpty {
             arguments += ["--agent", agent]
@@ -43,7 +50,7 @@ public enum TaskCommand {
             // 1 つの値にまとめて渡す（`Bash(git diff *)` のように空白を含むものがあるため、カンマ区切り）。
             arguments += ["--allowedTools", environment.allowedTools.joined(separator: ",")]
         }
-        if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+        if !request.resume, let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
             arguments += ["--name", name]
         }
         return arguments

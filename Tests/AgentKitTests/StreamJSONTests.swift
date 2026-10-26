@@ -70,6 +70,39 @@ final class StreamJSONTests: XCTestCase {
         transcript.consume(#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t2","content":"ok"}]},"parent_tool_use_id":null}"#)
         XCTAssertEqual(transcript.changedFiles, ["/a"])
     }
+
+    func testFollowUpKeepsHistoryAndClearsResult() throws {
+        var transcript = TaskTranscript()
+        for line in try fixtureLines("task-with-subagent") { transcript.consume(line) }
+        transcript.beginFollowUp()
+        XCTAssertNil(transcript.result)
+        XCTAssertNil(transcript.currentTool)
+        XCTAssertEqual(transcript.lastAssistantText, "README の見出しを直し、テストを追加しました。")
+        XCTAssertEqual(transcript.changedFiles.count, 2)
+        XCTAssertEqual(transcript.toolUseCount, 5)
+
+        transcript.consume(#"{"type":"assistant","message":{"content":[{"type":"text","text":"続きをやります。"},{"type":"tool_use","id":"f1","name":"Write","input":{"file_path":"/Users/me/src/app/CHANGELOG.md"}}]},"parent_tool_use_id":null}"#)
+        XCTAssertEqual(transcript.currentTool?.name, "Write")
+        transcript.consume(#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"f1","content":"ok"}]},"parent_tool_use_id":null}"#)
+        transcript.consume(#"{"type":"result","subtype":"success","is_error":false,"result":"CHANGELOG も更新しました。","num_turns":2}"#)
+        XCTAssertEqual(transcript.changedFiles.last, "/Users/me/src/app/CHANGELOG.md")
+        XCTAssertEqual(transcript.changedFiles.count, 3)
+        XCTAssertEqual(transcript.toolUseCount, 6)
+        XCTAssertEqual(transcript.lastAssistantText, "CHANGELOG も更新しました。")
+        XCTAssertEqual(transcript.result?.turns, 2)
+    }
+
+    func testFollowUpAfterStopMidToolClearsTool() {
+        // 停止したタスクは result が無く、ツールが動いたままになっている。
+        var transcript = TaskTranscript()
+        transcript.consume(#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"s1","name":"Edit","input":{"file_path":"/a"}}]},"parent_tool_use_id":null}"#)
+        XCTAssertEqual(transcript.currentTool?.name, "Edit")
+        transcript.beginFollowUp()
+        XCTAssertNil(transcript.currentTool)
+        // 前回の結果待ちの編集は数えない。
+        transcript.consume(#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"s1","content":"ok"}]},"parent_tool_use_id":null}"#)
+        XCTAssertEqual(transcript.changedFiles, [])
+    }
 }
 
 final class LineBufferTests: XCTestCase {
