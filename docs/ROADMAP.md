@@ -12,6 +12,7 @@
 | M4 定義の管理 | サブエージェント定義の作成・編集 |
 | M5 仕上げ・公開準備 | 日常使いの快適さと配布 |
 | M6 他アプリの通知（拡張） | git・メール・GitHub などの通知もノッチで受け取る |
+| M7 クラウドのセッション（拡張） | claude.ai/code などクラウドで動く Claude Code もノッチに表示し、承認する |
 
 ## M0. 準備
 | # | タスク | 担当 | 完了条件 | テスト方法 |
@@ -73,6 +74,22 @@
 | 6-4 | ☐ レシピ集（git hooks、Mail.app ルール、ショートカット、launchd）を docs に追加 | swift-macos-engineer | 手順どおりに設定すると通知が届く | 手動 |
 | 6-5 | ☐ GitHub 連携（Notifications API、Keychain、`If-Modified-Since` / `X-Poll-Interval`、種類の絞り込み） | swift-macos-engineer | 304 時は何も更新せず、間隔を守る | `swift test`（応答フィクスチャ）+ 手動 |
 | 6-6 | ☐ Slack 連携（Socket Mode）と Dock バッジ表示は需要を見て判断 | architect | 採否を ADR に残す | レビュー |
+
+## M7. クラウドのセッション（拡張）
+方針は [ADR-0003](adr/0003-cloud-sessions.md)（提案）。M2 の後ならいつでも着手できる。7-0 の結果で ADR を「承認」にし、7-1 以降の範囲を確定する。
+
+**リレーなしで今すぐできること**: プロジェクトのスレッドを自分の Mac で動かす（Remote Control）と、Mac 上の Claude Code として今の hooks 経路で表示・承認できる。
+
+| # | タスク | 担当 | 完了条件 | テスト方法 |
+| --- | --- | --- | --- | --- |
+| 7-0 | ☐ 検証スパイク: ADR-0003 の C1〜C5（リポジトリの hooks がクラウドで動くか、`PermissionRequest` の応答が効くか、プロジェクトのスレッドで hooks を動かす手段、ネットワークシークレット、`SessionEnd` の送り切り） | claude-code-integration | C1〜C5 に「確認済み（日付・方法）」か「不可」が付き、ADR-0003 が更新されている | 実機（クラウド） |
+| 7-1 | ☐ リレーのワイヤ形式（`origin: cloud`、`cloud.session_id`、`repo`）のモデルとデコード・検証を `AgentKit` に追加。`SessionStore` がクラウドのセッションを区別して持つ | swift-macos-engineer | 不正な入力でも落ちず、ローカルとクラウドの同じ ID が混ざらない | `swift test` |
+| 7-2 | ☐ `notch-cloud-hook.sh`（`CLAUDE_CODE_REMOTE` 以外では即終了、送信は `async`、`--wait` / `--ask` は応答待ち、失敗時は何も出さず exit 0） | swift-macos-engineer | リレー不在で 3 秒以内に exit 0、ローカルでは何もしない | シェルのテスト（Linux CI）+ 実機 |
+| 7-3 | ☐ リレー（`relay/`、Cloudflare Workers + Durable Object）: `event` / `wait` / `stream` / `decision`、トークン照合、保存しない、Mac 未接続なら即「判断しない」 | swift-macos-engineer | 認証なしの要求を拒否し、Mac 未接続の `wait` が即座に返る | Workers のローカル実行でテスト（CI） |
+| 7-4 | ☐ アプリの `RelayClient`（`URLSession` WebSocket、有効時のみ接続、再接続）と一覧の「クラウド」表示、claude.ai/code を開く | swift-macos-engineer | 有効にしていなければ一切通信しない。待機中 CPU ほぼ 0 % のまま | `swift test`（再接続の判定）+ 手動 |
+| 7-5 | ☐ クラウドの承認・質問を `ApprovalQueue` に統合（「クラウド」とリポジトリ名を表示、claude.ai で先に答えたらカードを消す） | swift-macos-engineer | 明示クリック以外で承認されない。期限切れで「判断しない」になる | `swift test` + 実機 |
+| 7-6 | ☐ セットアップ: 設定画面（URL・端末トークン・接続状態・テスト送信）、クラウド環境の設定手順（ネットワークシークレット／許可ドメイン）と hooks の追加（差分 → 確認）、`docs/cloud-setup.md` | swift-macos-engineer | 手順どおりに設定するとクラウドのセッションが表示される | 手動 |
+| 7-7 | ☐ ノッチからクラウドのタスクを始める（`claude --cloud`）・追加の指示（`claude -p --cloud <id>`）。需要を見て判断 | architect | 採否を ADR-0003 に追記 | レビュー |
 
 ## 各タスクの完了の定義（共通）
 - テストが追加され、CI が緑。
