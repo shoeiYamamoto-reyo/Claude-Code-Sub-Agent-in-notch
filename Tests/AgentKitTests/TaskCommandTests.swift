@@ -42,6 +42,20 @@ final class TaskCommandTests: XCTestCase {
         XCTAssertFalse(TaskCommand.arguments(for: blank, environment: ProjectEnvironment(), name: " ").contains("--name"))
     }
 
+    func testResumeArguments() {
+        let request = TaskRequest(projectID: projectID, agent: "reviewer", prompt: "Also check the tests", sessionID: sessionID, resume: true)
+        let environment = ProjectEnvironment(permissionMode: "acceptEdits")
+        // 同じ ID で再開し、エージェントと環境は付け直す。名前は付けない。
+        XCTAssertEqual(TaskCommand.arguments(for: request, environment: environment, name: "Also check the tests"), [
+            "-p",
+            "--output-format", "stream-json",
+            "--verbose",
+            "--resume", "6f9619ff-8b86-d011-b42d-00c04fc964ff",
+            "--agent", "reviewer",
+            "--permission-mode", "acceptEdits",
+        ])
+    }
+
     func testEnvironment() {
         let project = ProjectEnvironment(variables: [
             EnvironmentVariable(name: "NODE_ENV", value: "test"),

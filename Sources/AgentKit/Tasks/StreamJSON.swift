@@ -137,6 +137,14 @@ public struct TaskTranscript: Sendable, Equatable {
         apply(event)
     }
 
+    /// 同じセッションの続き（`--resume`、ROADMAP 3-6）を流し込む前に呼ぶ。前回の結果と動いているツールを消す。
+    /// 最後の応答・変更したファイル・ツールの回数はそのまま積み上げる。
+    public mutating func beginFollowUp() {
+        result = nil
+        currentTool = nil
+        pendingEdits.removeAll()
+    }
+
     public mutating func apply(_ event: StreamJSONEvent) {
         switch event {
         case .initialized(let sessionID, let model, let cwd):

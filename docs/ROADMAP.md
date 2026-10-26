@@ -50,7 +50,7 @@
 | 3-3 | ☑ `TaskRunner`: 起動コマンドの組み立て（`AgentKit` の `TaskCommand`、指示は標準入力で渡す）と子プロセス実行・停止（アプリ、SIGINT → 5 秒後 SIGTERM、出力は `tasks/<session-id>.jsonl`）、`claude` の場所の検出（`ClaudeLocator`、ログインシェルの `PATH`）。確認用の「タスクを開始」ウインドウ | swift-macos-engineer | 指示 → 実行 → 完了、途中停止が動く | コマンド組み立ては `swift test`、実行は手動 |
 | 3-4 | ☑ stream-json のデコード（`StreamJSONEvent` / `TaskTranscript` / `LineBuffer`）と結果表示（最後の応答、変更ファイル、コスト・時間。タスクの行と「タスクの結果」ウインドウ）。進み具合のセッション一覧は同じ session-id の hook で表示されるので、`SessionStore` には入れない | swift-macos-engineer | 起動したタスクが一覧に出て、結果が見られる | `swift test`（フィクスチャ）+ 手動 |
 | 3-5 | ☑ タスク投入 UI（プロジェクト・エージェント選択、指示入力、クイック入力ショートカット）。展開したノッチの入力欄（`QuickTaskBar`）を押すか ⌃⌥⌘N（`QuickInputHotKey`、起動中は登録したまま）で入力を始め、Return で開始、Esc でやめる。入力中だけパネルがキーウインドウになり（操作しないパネルなのでアプリは前面に出ない）、マウスが離れても縮まない（`NotchPresentationMachine.pin`）。プロジェクトの既定値は最後に使ったもの（`QuickTaskDefaults`）、エージェントは「おまかせ」。長い指示は従来のウインドウ | swift-macos-engineer | ホバー → 入力 → 開始が 3 操作以内 | 手動 |
-| 3-6 | ☐ 追加の指示で続ける（`--resume`） | swift-macos-engineer | 同じセッションで会話が続く | 手動 |
+| 3-6 | ☑ 追加の指示で続ける（`--resume`）。「タスクの結果」ウインドウの「追加の指示で続ける」から、終わったタスクを同じセッション ID で再開する（`TaskRequest.resume`、`--fork-session` は付けない）。エージェントとプロジェクトの環境は毎回付け直し、`--name` は付けない。一覧の行と出力ファイル（追記）は同じものを使い、`TaskTranscript.beginFollowUp` で前回の結果だけを消す | swift-macos-engineer | 同じセッションで会話が続く | 手動 |
 
 ## M4. 定義の管理
 | # | タスク | 担当 | 完了条件 | テスト方法 |

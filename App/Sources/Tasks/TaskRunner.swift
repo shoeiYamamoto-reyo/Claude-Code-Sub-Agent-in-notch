@@ -28,7 +28,10 @@ struct TaskRun: Identifiable, Equatable {
     let projectID: UUID
     let projectName: String
     let agent: String?
+    /// 最初の指示。
     let prompt: String
+    /// 続けて渡した指示（`--resume`、ROADMAP 3-6）。古い順。
+    var followUps: [String] = []
     let startedAt: Date
     var endedAt: Date?
     var state: State
@@ -48,6 +51,7 @@ struct TaskRun: Identifiable, Equatable {
 /// - コマンドと環境変数の組み立ては `TaskCommand`（AgentKit）。指示文は標準入力で渡す。
 /// - 出力は `~/Library/Application Support/NotchAgent/tasks/<session-id>.jsonl` に書きながら、
 ///   行ごとに `TaskTranscript`（AgentKit）でまとめる（最後の応答、変更ファイル、コスト。M3-4）。標準エラーは最後の数 KB だけ覚えてエラー表示に使う。
+/// - 終わったタスクは、追加の指示で同じセッションを続けられる（`--resume`、ROADMAP 3-6）。一覧の行と出力ファイルは同じものを使い続ける。
 /// - 停止は SIGINT（ターンを終わらせて記録を残す）→ 5 秒で終わらなければ SIGTERM。
 /// - アプリの終了時は動いているタスクに SIGTERM を送る（待たない）。
 @MainActor
@@ -65,6 +69,10 @@ final class TaskRunner {
         self.model = model
         self.claude = claude
         model.onStopTask = { [weak self] id in self?.stop(id) }
+        model.onContinueTask = { [weak self] id, prompt in
+            guard let self else { return "続けられません。" }
+            return self.continueTask(id, prompt: prompt)
+        }
     }
 
     static var outputDirectory: URL {
@@ -75,6 +83,55 @@ final class TaskRunner {
 
     /// タスクを始める。始められなければ理由を返す。
     func start(_ request: TaskRequest, project: Project) -> String? {
+        if let problem = launch(request, project: project) { return problem }
+        model.tasks.insert(TaskRun(
+            id: request.sessionID,
+            projectID: project.id,
+            projectName: project.name,
+            agent: request.agent,
+            prompt: request.prompt,
+            startedAt: Date(),
+            state: .running,
+            outputPath: Self.outputURL(for: request.sessionID).path
+        ), at: 0)
+        trimFinished()
+        return nil
+    }
+
+    /// 終わったタスクに追加の指示を渡し、同じセッションで続ける（ROADMAP 3-6、F2-4）。続けられなければ理由を返す。
+    ///
+    /// エージェントは最初と同じもの、環境は今のプロジェクトの設定を付け直す（`TaskCommand.arguments`）。
+    func continueTask(_ id: UUID, prompt: String) -> String? {
+        guard let run = model.tasks.first(where: { $0.id == id }) else { return "このタスクは一覧から消えました。" }
+        guard !run.isActive else { return "まだ動いています。終わってから続けてください。" }
+        guard let project = model.projects.project(id: run.projectID) else {
+            return "プロジェクト「\(run.projectName)」が見つかりません（削除された可能性があります）。"
+        }
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "追加の指示を入力してください。" }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: project.directory, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return "作業フォルダがありません: \(project.directory)"
+        }
+        let request = TaskRequest(projectID: project.id, agent: run.agent, prompt: trimmed, sessionID: id, resume: true)
+        if let problem = launch(request, project: project) { return problem }
+        // 動いているものとして一覧の先頭に移す。出力を読む前（同じ MainActor の中）に結果の区切りを入れる。
+        guard let index = model.tasks.firstIndex(where: { $0.id == id }) else { return nil }
+        var continued = model.tasks.remove(at: index)
+        continued.followUps.append(trimmed)
+        continued.state = .running
+        continued.endedAt = nil
+        continued.transcript.beginFollowUp()
+        model.tasks.insert(continued, at: 0)
+        return nil
+    }
+
+    private static func outputURL(for sessionID: UUID) -> URL {
+        outputDirectory.appendingPathComponent("\(sessionID.uuidString.lowercased()).jsonl")
+    }
+
+    /// 子プロセスを起動する。続き（`request.resume`）なら出力ファイルに追記する。
+    private func launch(_ request: TaskRequest, project: Project) -> String? {
         guard let executable = claude.executablePath() else {
             return "claude コマンドが見つかりません。メニューバーの「claude の場所を指定…」で指定してください。"
         }
@@ -89,14 +146,18 @@ final class TaskRunner {
             }
         }
 
-        let outputURL = Self.outputDirectory.appendingPathComponent("\(request.sessionID.uuidString.lowercased()).jsonl")
+        let outputURL = Self.outputURL(for: request.sessionID)
         let output: FileHandle
         do {
             try FileManager.default.createDirectory(at: Self.outputDirectory, withIntermediateDirectories: true)
-            guard FileManager.default.createFile(atPath: outputURL.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
-                return "出力ファイルを作れませんでした: \(outputURL.path)"
+            let append = request.resume && FileManager.default.fileExists(atPath: outputURL.path)
+            if !append {
+                guard FileManager.default.createFile(atPath: outputURL.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
+                    return "出力ファイルを作れませんでした: \(outputURL.path)"
+                }
             }
             output = try FileHandle(forWritingTo: outputURL)
+            if append { try output.seekToEnd() }
         } catch {
             return error.localizedDescription
         }
@@ -173,17 +234,6 @@ final class TaskRunner {
 
         processes[id] = process
         stderrTails[id] = tail
-        model.tasks.insert(TaskRun(
-            id: id,
-            projectID: project.id,
-            projectName: project.name,
-            agent: request.agent,
-            prompt: request.prompt,
-            startedAt: Date(),
-            state: .running,
-            outputPath: outputURL.path
-        ), at: 0)
-        trimFinished()
         return nil
     }
 

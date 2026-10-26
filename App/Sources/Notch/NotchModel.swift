@@ -65,6 +65,8 @@ final class NotchModel {
     @ObservationIgnored var onStopTask: ((UUID) -> Void)?
     /// タスクの行を押したとき（`TaskResultViewer.show`）。
     @ObservationIgnored var onShowTask: ((UUID) -> Void)?
+    /// 終わったタスクに追加の指示を渡して続ける。続けられなければ理由を返す（`TaskRunner.continueTask`、ROADMAP 3-6）。
+    @ObservationIgnored var onContinueTask: ((_ id: UUID, _ prompt: String) -> String?)?
 
     // MARK: - クイック入力（ROADMAP 3-5）
 

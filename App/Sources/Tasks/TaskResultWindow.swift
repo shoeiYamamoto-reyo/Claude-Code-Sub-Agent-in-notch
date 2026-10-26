@@ -3,6 +3,7 @@ import AppKit
 import SwiftUI
 
 /// タスクの結果を見るウインドウ（ROADMAP 3-4、F2-3）。実行中も出力に合わせて更新される。
+/// 終わったタスクは、ここから追加の指示で続けられる（ROADMAP 3-6、F2-4）。
 @MainActor
 final class TaskResultViewer {
     let model: NotchModel
@@ -45,6 +46,15 @@ private struct TaskResultView: View {
     let taskID: UUID
     let projectDirectory: String?
 
+    @State private var followUp = ""
+    @State private var problem: String?
+
+    init(model: NotchModel, taskID: UUID, projectDirectory: String?) {
+        self.model = model
+        self.taskID = taskID
+        self.projectDirectory = projectDirectory
+    }
+
     var body: some View {
         if let task = model.tasks.first(where: { $0.id == taskID }) {
             content(task)
@@ -72,11 +82,17 @@ private struct TaskResultView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            GroupBox("指示") {
-                Text(task.prompt)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .lineLimit(4)
+            GroupBox(task.followUps.isEmpty ? "指示" : "指示（\(task.followUps.count + 1) 回）") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(task.prompt)
+                        .lineLimit(4)
+                    ForEach(Array(task.followUps.enumerated()), id: \.offset) { _, prompt in
+                        Text("↳ " + prompt)
+                            .lineLimit(3)
+                    }
+                }
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             GroupBox(task.isActive ? "最新の応答" : "最後の応答") {
@@ -110,6 +126,10 @@ private struct TaskResultView: View {
                 }
             }
 
+            if !task.isActive {
+                continueBox(task)
+            }
+
             HStack {
                 Text("出力: \(ProjectPath.abbreviate(task.outputPath))")
                     .font(.caption)
@@ -124,6 +144,33 @@ private struct TaskResultView: View {
         }
         .padding(20)
         .frame(minWidth: 520, minHeight: 460)
+    }
+
+    /// 追加の指示で同じセッションを続ける（`--resume`）。
+    private func continueBox(_ task: TaskRun) -> some View {
+        GroupBox("追加の指示で続ける") {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .bottom) {
+                    TextField("同じ会話の続きとして指示します（⌘Return で続ける）", text: $followUp, axis: .vertical)
+                        .lineLimit(1...5)
+                        .textFieldStyle(.roundedBorder)
+                    Button("続ける") { continueTask(task) }
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .disabled(followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                if let problem {
+                    Label(problem, systemImage: "exclamationmark.circle")
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+    }
+
+    private func continueTask(_ task: TaskRun) {
+        guard let onContinue = model.onContinueTask else { return }
+        problem = onContinue(task.id, followUp)
+        if problem == nil { followUp = "" }
     }
 }
 
