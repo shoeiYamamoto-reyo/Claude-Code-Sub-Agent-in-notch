@@ -46,6 +46,8 @@ private struct IslandContent: View {
     let model: NotchModel
     let state: NotchPresentationState
     let barHeight: CGFloat
+    /// 縮んでも覚えておき、次に展開したときも同じタブを出す。
+    @State private var tab: ExpandedTab = .sessions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -74,12 +76,26 @@ private struct IslandContent: View {
                         .foregroundStyle(.orange)
                         .lineLimit(1)
                 }
-                SessionListView(
-                    sessions: model.sessions,
-                    receiver: model.receiver,
-                    installStatus: model.hookInstallStatus,
-                    onInstallHooks: { model.onInstallHooks?() }
-                )
+                ExpandedTabBar(selection: $tab)
+                switch tab {
+                case .sessions:
+                    SessionListView(
+                        sessions: model.sessions,
+                        projects: model.projects,
+                        receiver: model.receiver,
+                        installStatus: model.hookInstallStatus,
+                        onInstallHooks: { model.onInstallHooks?() },
+                        onRegisterFolder: { model.onRegisterFolder?($0) }
+                    )
+                case .projects:
+                    ProjectListView(
+                        registry: model.projects,
+                        sessions: model.sessions,
+                        loadError: model.projectLoadError,
+                        onAdd: { model.onAddProject?() },
+                        onEdit: { model.onEditProject?($0) }
+                    )
+                }
             }
         }
         .foregroundStyle(.white)
@@ -94,5 +110,41 @@ private struct IslandContent: View {
             return session.displayName
         }
         return request.cwd.map { ($0 as NSString).lastPathComponent } ?? "Claude Code"
+    }
+}
+
+enum ExpandedTab: CaseIterable {
+    case sessions
+    case projects
+
+    var title: String {
+        switch self {
+        case .sessions: "セッション"
+        case .projects: "プロジェクト"
+        }
+    }
+}
+
+/// 展開時のタブの切り替え。パネルはキー入力を受けないので、クリックだけで切り替える。
+private struct ExpandedTabBar: View {
+    @Binding var selection: ExpandedTab
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(ExpandedTab.allCases, id: \.self) { tab in
+                Button {
+                    selection = tab
+                } label: {
+                    Text(tab.title)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .foregroundStyle(selection == tab ? .black : .white.opacity(0.75))
+                        .background(selection == tab ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.1)), in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 }

@@ -13,7 +13,8 @@ struct NotchAgentApp: App {
                 model: appDelegate.model,
                 controller: appDelegate.controller,
                 hookCenter: appDelegate.hookCenter,
-                hookSetup: appDelegate.hookSetup
+                hookSetup: appDelegate.hookSetup,
+                projectCenter: appDelegate.projectCenter
             )
         }
     }
@@ -25,11 +26,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var controller = NotchPanelController(model: model)
     lazy var hookCenter = HookCenter(model: model, controller: controller)
     lazy var hookSetup = HookSetup(model: model)
+    lazy var projectCenter = ProjectCenter(model: model)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
         hookCenter.start()
         hookSetup.refreshStatus()
+        projectCenter.load()
         model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }
     }
 
@@ -44,6 +47,7 @@ private struct MenuContent: View {
     let controller: NotchPanelController
     let hookCenter: HookCenter
     let hookSetup: HookSetup
+    let projectCenter: ProjectCenter
 
     var body: some View {
         Text("Notch Agent（開発中）")
@@ -58,6 +62,17 @@ private struct MenuContent: View {
             hookSetup.beginUninstall()
         }
         .disabled(model.hookInstallStatus == .notInstalled)
+        Divider()
+        Button("プロジェクトを追加…") {
+            projectCenter.beginAdd()
+        }
+        if !model.projects.projects.isEmpty {
+            Menu("プロジェクトを編集") {
+                ForEach(model.projects.projects) { project in
+                    Button(project.name) { projectCenter.beginEdit(project.id) }
+                }
+            }
+        }
         Menu("開発用") {
             Button(checked("受信したイベントを記録", model.isCapturingEvents)) {
                 hookCenter.isCapturing.toggle()

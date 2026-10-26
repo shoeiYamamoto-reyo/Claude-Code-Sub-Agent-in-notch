@@ -92,12 +92,21 @@ public protocol ApprovalQueue: Sendable {
     func resolve(_ id: ApprovalRequest.ID, with decision: ApprovalDecision) async
 }
 
+// M3-1 で実装（Sources/AgentKit/Projects/）。
 public struct Project: Sendable, Codable, Identifiable {
     public let id: UUID
     public var name: String
-    public var directory: URL
-    public var environment: ProjectEnvironment   // model, permissionMode, allowedTools, env
+    public var directory: String                 // 正規化した絶対パス（ProjectPath.normalize）
+    public var environment: ProjectEnvironment   // model, effort, permissionMode, allowedTools, variables（秘密は Keychain）
 }
+
+public struct ProjectRegistry: Sendable, Equatable {
+    public mutating func upsert(_ project: Project) throws(ValidationError) -> Project
+    public mutating func remove(id: Project.ID) -> Project?
+    public func project(containing path: String) -> Project?   // hook の cwd → プロジェクト（入れ子は内側）
+}
+// 保存は ProjectRegistryFile（~/Library/Application Support/NotchAgent/projects.json、{"version": 1, "projects": [...]}）。
+// 読めない・新しい形式のファイルは上書きしない（アプリは編集を止めて知らせる）。
 
 public struct TaskRequest: Sendable {
     public var project: Project.ID

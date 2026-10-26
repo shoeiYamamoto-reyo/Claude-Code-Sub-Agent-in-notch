@@ -45,7 +45,7 @@
 ## M3. プロジェクトとタスク投入
 | # | タスク | 担当 | 完了条件 | テスト方法 |
 | --- | --- | --- | --- | --- |
-| 3-1 | ☐ `Project` / `ProjectEnvironment` のモデルと保存、登録・編集 UI、未登録フォルダからの登録 | swift-macos-engineer | 再起動後も登録が残る | `swift test` + 手動 |
+| 3-1 | ☑ `Project` / `ProjectEnvironment` のモデルと保存（`ProjectRegistry` / `ProjectRegistryFile`、`projects.json`）、登録・編集 UI（ノッチの「プロジェクト」タブ、編集ウインドウ、秘密の環境変数は Keychain）、未登録フォルダからの登録（セッションの行の「登録」） | swift-macos-engineer | 再起動後も登録が残る | `swift test` + 手動 |
 | 3-2 | ☐ エージェント定義の読み取り（ユーザー／プロジェクト）と一覧表示 | swift-macos-engineer | 実在の `.claude/agents/*.md` を正しく読める | `swift test` |
 | 3-3 | ☐ `TaskRunner`: 起動コマンドの組み立て（`AgentKit`）と子プロセス実行・停止（アプリ）、`claude` の場所の検出 | swift-macos-engineer | 指示 → 実行 → 完了、途中停止が動く | コマンド組み立ては `swift test`、実行は手動 |
 | 3-4 | ☐ stream-json のデコードと `SessionStore` への反映、結果表示（最後の応答、変更ファイル） | swift-macos-engineer | 起動したタスクが一覧に出て、結果が見られる | `swift test`（フィクスチャ）+ 手動 |
