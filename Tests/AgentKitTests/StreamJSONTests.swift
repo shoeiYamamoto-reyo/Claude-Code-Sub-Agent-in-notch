@@ -91,6 +91,18 @@ final class StreamJSONTests: XCTestCase {
         XCTAssertEqual(transcript.lastAssistantText, "CHANGELOG も更新しました。")
         XCTAssertEqual(transcript.result?.turns, 2)
     }
+
+    func testFollowUpAfterStopMidToolClearsTool() {
+        // 停止したタスクは result が無く、ツールが動いたままになっている。
+        var transcript = TaskTranscript()
+        transcript.consume(#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"s1","name":"Edit","input":{"file_path":"/a"}}]},"parent_tool_use_id":null}"#)
+        XCTAssertEqual(transcript.currentTool?.name, "Edit")
+        transcript.beginFollowUp()
+        XCTAssertNil(transcript.currentTool)
+        // 前回の結果待ちの編集は数えない。
+        transcript.consume(#"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"s1","content":"ok"}]},"parent_tool_use_id":null}"#)
+        XCTAssertEqual(transcript.changedFiles, [])
+    }
 }
 
 final class LineBufferTests: XCTestCase {
