@@ -23,7 +23,7 @@ public struct NotchLayout: Sendable, Equatable {
     /// `peek` で島の下に足す高さ。
     public static let peekExtraHeight: CGFloat = 34
     public static let peekMinimumWidth: CGFloat = 320
-    public static let expandedMinimumSize = CGSize(width: 560, height: 300)
+    public static let expandedMinimumSize = CGSize(width: 560, height: 380)
     /// パネルを島より大きく取る余白（アニメーションの行き過ぎで切れないように）。
     public static let panelMargin: CGFloat = 24
 

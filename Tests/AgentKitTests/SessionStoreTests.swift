@@ -160,6 +160,19 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertNil(store.session(id: "s1")?.pendingPermission)
     }
 
+    func testPermissionAnsweredInNotch() {
+        var store = SessionStore()
+        store.apply(event("PermissionRequest", ["tool_name": .string("Bash")]), at: t0)
+        store.permissionAnswered(sessionID: "s1", at: t0 + 1)
+        XCTAssertEqual(store.session(id: "s1")?.status, .working)
+        XCTAssertNil(store.session(id: "s1")?.pendingPermission)
+        // 承認待ちでなければ何もしない。
+        store.apply(event("Stop"), at: t0 + 2)
+        store.permissionAnswered(sessionID: "s1", at: t0 + 3)
+        XCTAssertEqual(store.session(id: "s1")?.status, .done)
+        store.permissionAnswered(sessionID: "unknown", at: t0 + 3)
+    }
+
     func testStopFailureShowsError() {
         var store = SessionStore()
         store.apply(event("UserPromptSubmit"), at: t0)

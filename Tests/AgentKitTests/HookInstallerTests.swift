@@ -85,11 +85,18 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(installed["permissions"], original["permissions"])
         XCTAssertEqual(installed["hooks"]?["PostCompact"], original["hooks"]?["PostCompact"])
         let preToolUse = try XCTUnwrap(installed["hooks"]?["PreToolUse"]?.arrayValue)
-        XCTAssertEqual(preToolUse.count, 2)
+        XCTAssertEqual(preToolUse.count, 3)
         XCTAssertEqual(preToolUse.first, original["hooks"]?["PreToolUse"]?.arrayValue?.first)
-        XCTAssertEqual(preToolUse.last?["hooks"]?.arrayValue?.first?["command"]?.stringValue, hookPath)
-        XCTAssertEqual(preToolUse.last?["hooks"]?.arrayValue?.first?["args"], .array([]))
-        XCTAssertEqual(preToolUse.last?["hooks"]?.arrayValue?.first?["timeout"], .number("5"))
+        XCTAssertEqual(preToolUse[1]["hooks"]?.arrayValue?.first?["command"]?.stringValue, hookPath)
+        XCTAssertEqual(preToolUse[1]["hooks"]?.arrayValue?.first?["args"], .array([]))
+        XCTAssertEqual(preToolUse[1]["hooks"]?.arrayValue?.first?["timeout"], .number("5"))
+        // AskUserQuestion だけ回答を待つ。
+        XCTAssertEqual(preToolUse[2]["matcher"], .string("AskUserQuestion"))
+        XCTAssertEqual(preToolUse[2]["hooks"]?.arrayValue?.first?["args"], .array([.string("--ask")]))
+        XCTAssertEqual(preToolUse[2]["hooks"]?.arrayValue?.first?["timeout"], .number("130"))
+        let permission = installed["hooks"]?["PermissionRequest"]?.arrayValue?.first?["hooks"]?.arrayValue?.first
+        XCTAssertEqual(permission?["args"], .array([.string("--wait")]))
+        XCTAssertEqual(permission?["timeout"], .number("120"))
         for event in HookInstaller.sendOnlyEvents {
             XCTAssertNotNil(installed["hooks"]?[event], event)
         }
@@ -104,7 +111,7 @@ final class HookInstallerTests: XCTestCase {
 
     func testInstallIntoEmptySettingsAndUninstallRemovesHooksKey() throws {
         let installed = try HookInstaller.install(into: .object([]), hookPath: hookPath)
-        XCTAssertEqual(installed["hooks"]?.members?.count, HookInstaller.sendOnlyEvents.count)
+        XCTAssertEqual(installed["hooks"]?.members?.count, Set(HookInstaller.registrations.map(\.event)).count)
         XCTAssertEqual(try HookInstaller.uninstall(from: installed), .object([]))
     }
 

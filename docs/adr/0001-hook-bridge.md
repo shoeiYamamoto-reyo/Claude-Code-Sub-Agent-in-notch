@@ -31,7 +31,8 @@
   | `SessionStart`, `SessionEnd`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SubagentStart`, `SubagentStop` | なし | 5 | 送信だけして即終了 |
   | `PermissionRequest` | `--wait` | 120 | 応答を待ち、決定を stdout に出す |
   | `PreToolUse`（matcher `AskUserQuestion`） | `--ask` | 130 | 回答を待ち、`updatedInput` を出す |
-- **M1 時点の登録**: 上の表の送信だけのイベントに加え、`PermissionRequest` も**送信だけ**（`--wait` なし、timeout 5）で登録する。承認待ちの表示に使い、何も出力しないので判断は Claude Code の通常の確認に任せる。M2-1 で `--wait`（timeout 120）に、M2-3 で `--ask` を追加する（インストーラは古い自分のエントリを外してから入れ直すので、再インストールで移行できる）。
+- **登録の移り変わり**: M1 では `PermissionRequest` を送信だけで登録していた。M2 で上の表のとおり `--wait`（timeout 120）と `--ask`（matcher `AskUserQuestion`、timeout 130）に変えた。インストーラは古い自分のエントリを外してから入れ直すので、メニューの「hooks をインストール…」で移行できる（メニューに「更新が必要」と出る）。
+- **応答待ちの実装（M2）**: 中継は接続 300 ms、応答は `--wait` 118 秒・`--ask` 128 秒まで待つ（settings の timeout より短くし、Claude Code に止められる前に静かに終わる）。アプリ（`HookSocketServer`）は接続を開いたまま `ApprovalQueue` に入れ、ボタンが押されたら 1 行返す。相手が閉じたらカードを消す。ターミナルで答えられたものは `PostToolUse` の「ツール名 + 入力」の一致、またはそのセッションの `Stop` / `UserPromptSubmit` で片付け、応答せずに閉じる。キューは 5 件まで（溢れたら `pass`）。カードが切り替わってから 0.4 秒はクリックを受け付けない。
 - 守ること:
   - ソケットへの接続タイムアウトは 300 ms。接続できない・応答が無い・壊れた応答のときは**何も出力せず exit 0**。
   - 終了コードは常に 0（exit 2 は使わない）。stdout には Claude Code 向けの JSON 1 つだけを出す。

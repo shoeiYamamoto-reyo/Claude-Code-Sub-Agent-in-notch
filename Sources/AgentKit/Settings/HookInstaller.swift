@@ -15,17 +15,23 @@ public enum HookInstaller {
         public var timeout: Int
     }
 
-    /// 送るだけのイベント（ADR-0001 の表）。応答待ちの `--wait` / `--ask` は M2 で足す。
-    /// `PermissionRequest` も M1 では送るだけ（承認待ちの表示に使う。何も出力しないので判断は Claude Code に任せる）。
+    /// 送るだけのイベント（ADR-0001 の表）。
     public static let sendOnlyEvents = [
-        "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse",
+        "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PostToolUse",
         "PostToolUseFailure", "Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop",
     ]
 
     public static let sendOnlyTimeout = 5
+    /// 権限リクエストはノッチでの応答を待つ（中継は 118 秒、アプリは 115 秒で諦める）。
+    public static let waitTimeout = 120
+    /// `AskUserQuestion` への回答を待つ（中継は 128 秒、アプリは 125 秒で諦める）。
+    public static let askTimeout = 130
 
     public static var registrations: [Registration] {
-        sendOnlyEvents.map { Registration(event: $0, matcher: nil, arguments: [], timeout: sendOnlyTimeout) }
+        sendOnlyEvents.map { Registration(event: $0, matcher: nil, arguments: [], timeout: sendOnlyTimeout) } + [
+            Registration(event: "PermissionRequest", matcher: nil, arguments: ["--wait"], timeout: waitTimeout),
+            Registration(event: "PreToolUse", matcher: AskQuestion.toolName, arguments: ["--ask"], timeout: askTimeout),
+        ]
     }
 
     public enum PlanError: Error, Equatable {

@@ -13,7 +13,7 @@ NotchAgent.app ◀────┤                                               
  ├─ TaskRunner      … タスクの起動・停止・出力の読み取り                     │ hook: stdin JSON
  ├─ HookCenter      … ソケット受信（AgentKit の HookSocketServer）◀── Unix ソケット ── notch-hook（中継 CLI）
  ├─ SessionStore    … セッション／サブエージェントの状態（hook と TaskRunner の両方から）
- ├─ ApprovalQueue   … 承認待ちキュー
+ ├─ ApprovalQueue   … 承認待ちキュー（AgentKit の値型。表示中のカードにだけ答える）
  ├─ AgentCatalog    … .claude/agents の読み書き
  └─ NotchUI         … NSPanel + SwiftUI（キャラクター、展開ウィンドウ）
 ```

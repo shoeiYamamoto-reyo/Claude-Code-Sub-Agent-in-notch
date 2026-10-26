@@ -59,7 +59,16 @@ private struct IslandContent: View {
                     .frame(maxWidth: .infinity)
                     .transition(.opacity)
             case .expanded:
-                if let noticeText = model.noticeText {
+                if let request = model.approvals.first {
+                    ApprovalCardView(
+                        request: request,
+                        sessionName: sessionName(for: request),
+                        queueCount: model.approvals.count,
+                        onReply: { reply in model.onApprovalReply?(request.id, reply) }
+                    )
+                    // 要求が変わったら選択状態などを作り直す。
+                    .id(request.id)
+                } else if let noticeText = model.noticeText {
                     Label(noticeText, systemImage: "bell")
                         .font(.callout)
                         .foregroundStyle(.orange)
@@ -68,7 +77,8 @@ private struct IslandContent: View {
                 SessionListView(
                     sessions: model.sessions,
                     receiver: model.receiver,
-                    installStatus: model.hookInstallStatus
+                    installStatus: model.hookInstallStatus,
+                    onInstallHooks: { model.onInstallHooks?() }
                 )
             }
         }
@@ -77,5 +87,12 @@ private struct IslandContent: View {
         .padding(.top, barHeight + (state == .expanded ? 14 : 6))
         .padding(.bottom, 12)
         .transition(.opacity)
+    }
+
+    private func sessionName(for request: ApprovalRequest) -> String {
+        if let session = model.sessions.first(where: { $0.id == request.sessionID }) {
+            return session.displayName
+        }
+        return request.cwd.map { ($0 as NSString).lastPathComponent } ?? "Claude Code"
     }
 }

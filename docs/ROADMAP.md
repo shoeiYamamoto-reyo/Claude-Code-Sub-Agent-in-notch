@@ -37,9 +37,9 @@
 ## M2. 承認
 | # | タスク | 担当 | 完了条件 | テスト方法 |
 | --- | --- | --- | --- | --- |
-| 2-1 | ☐ 中継 CLI の応答待ちモード（承認イベントで応答を待ち、stdout に決定を返す） | swift-macos-engineer | 許可・拒否・タイムアウト・アプリ終了の 4 パターンが正しく動く | `swift test` |
-| 2-2 | ☐ `ApprovalQueue` と承認 UI（peek での通知、許可／拒否、キュー表示、ショートカット） | swift-macos-engineer | 明示クリック以外で承認されない | `swift test` + 手動 |
-| 2-3 | ☐ `AskUserQuestion` への回答（仕様上可能な場合） | swift-macos-engineer | 選択肢を選ぶと Claude Code に反映 | 手動 |
+| 2-1 | ☑ 中継 CLI の応答待ちモード（承認イベントで応答を待ち、stdout に決定を返す） | swift-macos-engineer | 許可・拒否・タイムアウト・アプリ終了の 4 パターンが正しく動く | `swift test` |
+| 2-2 | ◐ `ApprovalQueue` と承認 UI（peek での通知、許可／拒否、キュー表示、ショートカット）。ショートカット以外は実装済み。ショートカットはパネルがキー入力を受けないため、グローバルなホットキー（Carbon の `RegisterEventHotKey`）として別途追加する | swift-macos-engineer | 明示クリック以外で承認されない | `swift test` + 手動 |
+| 2-3 | ☑ `AskUserQuestion` への回答（仕様上可能な場合） | swift-macos-engineer | 選択肢を選ぶと Claude Code に反映 | 手動 |
 
 ## M3. プロジェクトとタスク投入
 | # | タスク | 担当 | 完了条件 | テスト方法 |
