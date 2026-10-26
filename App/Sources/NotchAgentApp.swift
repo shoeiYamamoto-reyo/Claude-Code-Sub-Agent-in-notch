@@ -27,12 +27,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var hookCenter = HookCenter(model: model, controller: controller)
     lazy var hookSetup = HookSetup(model: model)
     lazy var projectCenter = ProjectCenter(model: model)
+    lazy var agentLibrary = AgentLibrary(model: model)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
         hookCenter.start()
         hookSetup.refreshStatus()
         projectCenter.load()
+        // 定義は「エージェント」タブを開いたときに読む（ここでは受け口だけ用意する）。
+        _ = agentLibrary
         model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }
     }
 

@@ -45,6 +45,13 @@ final class NotchModel {
     @ObservationIgnored var onEditProject: ((Project.ID) -> Void)?
     /// 未登録のフォルダで動いているセッションの「登録」（F1-4、`ProjectCenter.beginAdd(directory:)`）。
     @ObservationIgnored var onRegisterFolder: ((String) -> Void)?
+
+    // MARK: - サブエージェント定義（ROADMAP 3-2）
+
+    /// 最後に読んだ定義の一覧。まだ読んでいなければ nil。変更は `AgentLibrary` だけが行う。
+    var agentOverview: AgentOverview?
+    /// 「エージェント」タブを開いたとき（`AgentLibrary.refresh`）。
+    @ObservationIgnored var onRefreshAgents: (() -> Void)?
 }
 
 enum ReceiverStatus: Equatable {

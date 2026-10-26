@@ -95,6 +95,13 @@ private struct IslandContent: View {
                         onAdd: { model.onAddProject?() },
                         onEdit: { model.onEditProject?($0) }
                     )
+                case .agents:
+                    AgentListView(
+                        overview: model.agentOverview,
+                        onRefresh: { model.onRefreshAgents?() }
+                    )
+                    // 登録・編集・削除したプロジェクトの定義を出し直す。
+                    .onChange(of: model.projects) { model.onRefreshAgents?() }
                 }
             }
         }
@@ -116,11 +123,13 @@ private struct IslandContent: View {
 enum ExpandedTab: CaseIterable {
     case sessions
     case projects
+    case agents
 
     var title: String {
         switch self {
         case .sessions: "セッション"
         case .projects: "プロジェクト"
+        case .agents: "エージェント"
         }
     }
 }
