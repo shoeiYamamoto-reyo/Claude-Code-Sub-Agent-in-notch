@@ -52,6 +52,17 @@ final class NotchModel {
     var agentOverview: AgentOverview?
     /// 「エージェント」タブを開いたとき（`AgentLibrary.refresh`）。
     @ObservationIgnored var onRefreshAgents: (() -> Void)?
+
+    // MARK: - タスク（ROADMAP 3-3）
+
+    /// アプリから始めたタスク（新しい順）。変更は `TaskRunner` だけが行う。
+    var tasks: [TaskRun] = []
+    /// 見つかった `claude` の場所。nil なら未検出。
+    var claudePath: String?
+    /// 「タスクを開始…」（`TaskLauncher.open`）。プロジェクトを決めて開くときはその ID。
+    @ObservationIgnored var onStartTask: ((Project.ID?) -> Void)?
+    /// 実行中のタスクの「停止」（`TaskRunner.stop`）。
+    @ObservationIgnored var onStopTask: ((UUID) -> Void)?
 }
 
 enum ReceiverStatus: Equatable {

@@ -108,16 +108,23 @@ public struct ProjectRegistry: Sendable, Equatable {
 // 保存は ProjectRegistryFile（~/Library/Application Support/NotchAgent/projects.json、{"version": 1, "projects": [...]}）。
 // 読めない・新しい形式のファイルは上書きしない（アプリは編集を止めて知らせる）。
 
-public struct TaskRequest: Sendable {
-    public var project: Project.ID
+// M3-3 で実装（Sources/AgentKit/Tasks/）。
+public struct TaskRequest: Sendable, Equatable {
+    public var projectID: UUID
     public var agent: String?                    // nil = おまかせ
-    public var prompt: String
+    public var prompt: String                    // 標準入力で渡す
+    public var sessionID: UUID                   // --session-id。hook のセッションと同じ ID になる
 }
 
-public protocol TaskRunner: Sendable {
-    func start(_ request: TaskRequest) async throws -> TaskHandle
-    func stop(_ handle: TaskHandle) async
+public enum TaskCommand {                        // 起動コマンドと環境変数の組み立て
+    public static func arguments(for: TaskRequest, environment: ProjectEnvironment, name: String?) -> [String]
+    public static func environment(base:loginShellPath:project:secrets:) -> [String: String]
 }
+
+public enum ClaudeLocator {                      // 設定値 → ログインシェルの command -v → よくある場所
+    public static func locate(configured: String?, probed: String?, home: String) -> String?
+}
+// 子プロセスの管理はアプリの TaskRunner（@MainActor クラス、Process を使う）。
 
 // M3-2 で実装（Sources/AgentKit/Agents/）。読み取りのみ。書き出し（未知のフィールドを保つ往復）は M4-1。
 public struct AgentDefinition: Sendable, Equatable {

@@ -14,7 +14,9 @@ struct NotchAgentApp: App {
                 controller: appDelegate.controller,
                 hookCenter: appDelegate.hookCenter,
                 hookSetup: appDelegate.hookSetup,
-                projectCenter: appDelegate.projectCenter
+                projectCenter: appDelegate.projectCenter,
+                taskLauncher: appDelegate.taskLauncher,
+                claudeSetup: appDelegate.claudeSetup
             )
         }
     }
@@ -28,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var hookSetup = HookSetup(model: model)
     lazy var projectCenter = ProjectCenter(model: model)
     lazy var agentLibrary = AgentLibrary(model: model)
+    lazy var claudeSetup = ClaudeSetup(model: model)
+    lazy var taskRunner = TaskRunner(model: model, claude: claudeSetup)
+    lazy var taskLauncher = TaskLauncher(model: model, runner: taskRunner)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
@@ -36,10 +41,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         projectCenter.load()
         // 定義は「エージェント」タブを開いたときに読む（ここでは受け口だけ用意する）。
         _ = agentLibrary
+        claudeSetup.start()
+        _ = taskLauncher
         model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        taskRunner.terminateAll()
         hookCenter.stop()
     }
 }
@@ -51,6 +59,8 @@ private struct MenuContent: View {
     let hookCenter: HookCenter
     let hookSetup: HookSetup
     let projectCenter: ProjectCenter
+    let taskLauncher: TaskLauncher
+    let claudeSetup: ClaudeSetup
 
     var body: some View {
         Text("Notch Agent（開発中）")
@@ -65,6 +75,20 @@ private struct MenuContent: View {
             hookSetup.beginUninstall()
         }
         .disabled(model.hookInstallStatus == .notInstalled)
+        Divider()
+        Button("タスクを開始…") {
+            taskLauncher.open()
+        }
+        .disabled(model.projects.projects.isEmpty)
+        Text(model.claudePath.map { "claude: \($0)" } ?? "claude: 見つかりません")
+        Button("claude の場所を指定…") {
+            claudeSetup.chooseExecutable()
+        }
+        if claudeSetup.configuredPath != nil {
+            Button("claude の場所を自動検出に戻す") {
+                claudeSetup.resetConfiguredPath()
+            }
+        }
         Divider()
         Button("プロジェクトを追加…") {
             projectCenter.beginAdd()

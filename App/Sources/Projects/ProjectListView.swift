@@ -8,6 +8,8 @@ struct ProjectListView: View {
     let loadError: String?
     let onAdd: () -> Void
     let onEdit: (Project.ID) -> Void
+    /// 「タスクを開始…」。nil なら最初のプロジェクトで開く。
+    let onStartTask: (Project.ID?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -34,6 +36,10 @@ struct ProjectListView: View {
                             ProjectRow(project: project, activeSessions: activeSessionCount(in: project)) {
                                 onEdit(project.id)
                             }
+                            .contextMenu {
+                                Button("このプロジェクトでタスクを開始…") { onStartTask(project.id) }
+                                Button("編集…") { onEdit(project.id) }
+                            }
                         }
                     }
                     .padding(.bottom, 4)
@@ -55,6 +61,10 @@ struct ProjectListView: View {
                     .background(.white.opacity(0.15), in: Capsule())
             }
             Spacer()
+            if !registry.projects.isEmpty {
+                Button("タスクを開始…") { onStartTask(nil) }
+                    .buttonStyle(CardButtonStyle(tint: .blue, prominent: true))
+            }
             Button("追加…", action: onAdd)
                 .buttonStyle(CardButtonStyle(tint: .white))
                 .disabled(loadError != nil)

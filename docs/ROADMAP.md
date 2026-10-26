@@ -47,7 +47,7 @@
 | --- | --- | --- | --- | --- |
 | 3-1 | ☑ `Project` / `ProjectEnvironment` のモデルと保存（`ProjectRegistry` / `ProjectRegistryFile`、`projects.json`）、登録・編集 UI（ノッチの「プロジェクト」タブ、編集ウインドウ、秘密の環境変数は Keychain）、未登録フォルダからの登録（セッションの行の「登録」） | swift-macos-engineer | 再起動後も登録が残る | `swift test` + 手動 |
 | 3-2 | ☑ エージェント定義の読み取り（ユーザー／プロジェクト）と一覧表示（`Frontmatter` / `AgentDefinition` / `AgentCatalog`、ノッチの「エージェント」タブ。読み飛ばされる定義と、同じ名前で上書きされる定義も表示） | swift-macos-engineer | 実在の `.claude/agents/*.md` を正しく読める | `swift test` |
-| 3-3 | ☐ `TaskRunner`: 起動コマンドの組み立て（`AgentKit`）と子プロセス実行・停止（アプリ）、`claude` の場所の検出 | swift-macos-engineer | 指示 → 実行 → 完了、途中停止が動く | コマンド組み立ては `swift test`、実行は手動 |
+| 3-3 | ☑ `TaskRunner`: 起動コマンドの組み立て（`AgentKit` の `TaskCommand`、指示は標準入力で渡す）と子プロセス実行・停止（アプリ、SIGINT → 5 秒後 SIGTERM、出力は `tasks/<session-id>.jsonl`）、`claude` の場所の検出（`ClaudeLocator`、ログインシェルの `PATH`）。確認用の「タスクを開始」ウインドウ | swift-macos-engineer | 指示 → 実行 → 完了、途中停止が動く | コマンド組み立ては `swift test`、実行は手動 |
 | 3-4 | ☐ stream-json のデコードと `SessionStore` への反映、結果表示（最後の応答、変更ファイル） | swift-macos-engineer | 起動したタスクが一覧に出て、結果が見られる | `swift test`（フィクスチャ）+ 手動 |
 | 3-5 | ☐ タスク投入 UI（プロジェクト・エージェント選択、指示入力、クイック入力ショートカット） | swift-macos-engineer | ホバー → 入力 → 開始が 3 操作以内 | 手動 |
 | 3-6 | ☐ 追加の指示で続ける（`--resume`） | swift-macos-engineer | 同じセッションで会話が続く | 手動 |

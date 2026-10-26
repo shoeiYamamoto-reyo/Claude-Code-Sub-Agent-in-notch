@@ -1,0 +1,71 @@
+import AgentKit
+import SwiftUI
+
+/// アプリから始めたタスクの一覧（ROADMAP 3-3）。セッション一覧の上に出し、実行中のものは停止できる（F2-2）。
+/// 進み具合はセッション一覧（hook）に同じセッションとして出る。結果の表示は 3-4。
+struct TaskRunListView: View {
+    let tasks: [TaskRun]
+    let onStop: (UUID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("アプリから始めたタスク")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.6))
+            ForEach(tasks.prefix(3)) { task in
+                TaskRunRow(task: task) { onStop(task.id) }
+            }
+        }
+    }
+}
+
+private struct TaskRunRow: View {
+    let task: TaskRun
+    let onStop: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+            Text(task.state.displayName)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(color)
+                .frame(minWidth: 40, alignment: .leading)
+            Text(title)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if task.state == .running {
+                Button("停止", action: onStop)
+                    .buttonStyle(CardButtonStyle(tint: .red))
+                    .help("Claude Code に中断を伝えます（SIGINT）。5 秒で終わらなければ強制終了します")
+            }
+        }
+    }
+
+    private var title: String {
+        [task.projectName, task.agent].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private var detail: String {
+        if case .failed(let message) = task.state {
+            return ToolSummary.oneLine(message) ?? message
+        }
+        return TaskCommand.displayName(for: task.prompt)
+    }
+
+    private var color: Color {
+        switch task.state {
+        case .running: .blue
+        case .stopping: .orange
+        case .finished: .green
+        case .stopped: .gray
+        case .failed: .red
+        }
+    }
+}
