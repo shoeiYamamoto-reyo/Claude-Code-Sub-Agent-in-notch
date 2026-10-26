@@ -147,6 +147,8 @@ final class TaskRunner {
         // 指示文を渡して閉じる。大きくても詰まらないよう別スレッドで書く。
         let prompt = Data(request.prompt.utf8)
         let writer = input.fileHandleForWriting
+        // claude が読み切る前に終わったとき、SIGPIPE でアプリごと落ちないよう EPIPE のエラーで返させる。
+        _ = fcntl(writer.fileDescriptor, F_SETNOSIGPIPE, 1)
         DispatchQueue.global(qos: .userInitiated).async {
             try? writer.write(contentsOf: prompt)
             try? writer.close()
