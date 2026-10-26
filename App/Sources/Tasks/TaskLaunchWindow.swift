@@ -32,8 +32,13 @@ final class TaskLauncher {
             alert.runModal()
             return
         }
+        // 決めずに開いたときは、ノッチのクイック入力と同じ既定値にする。
         let selected = projectID.flatMap { id in projects.first { $0.id == id } }
-            ?? model.lastTaskProjectID.flatMap { id in projects.first { $0.id == id } }
+            ?? QuickTaskDefaults.project(
+                in: model.projects,
+                lastUsed: model.lastTaskProjectID,
+                activeDirectories: model.sessions.filter(\.isActive).compactMap(\.cwd)
+            )
             ?? projects[0]
         let view = TaskLaunchView(
             projects: projects,
