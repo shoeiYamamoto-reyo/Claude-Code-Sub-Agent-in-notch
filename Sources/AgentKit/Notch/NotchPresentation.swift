@@ -33,6 +33,8 @@ public struct NotchPresentationMachine: Sendable, Equatable {
     public private(set) var isHovering = false
     /// 知らせることがあるか（ある間、縮んだときは `peek` になる）。
     public private(set) var hasNotice = false
+    /// 入力中などで、マウスが離れても展開したままにしているか。
+    public private(set) var isPinned = false
     /// 次に `tick(at:)` を呼ぶべき時刻。nil ならタイマー不要。
     public private(set) var nextDeadline: Date?
     private var pendingState: NotchPresentationState?
@@ -57,7 +59,9 @@ public struct NotchPresentationMachine: Sendable, Equatable {
     public mutating func mouseExited(at now: Date) {
         guard isHovering else { return }
         isHovering = false
-        if state == .expanded {
+        if isPinned {
+            cancelPending()
+        } else if state == .expanded {
             schedule(restingState, after: configuration.collapseDelay, from: now)
         } else {
             cancelPending()
@@ -74,8 +78,25 @@ public struct NotchPresentationMachine: Sendable, Equatable {
         }
     }
 
-    /// 展開中にすぐ縮める（Esc キーなど）。
+    /// すぐ展開し、`unpin` まで展開したままにする（クイック入力、ROADMAP 3-5）。
+    public mutating func pin() {
+        isPinned = true
+        cancelPending()
+        state = .expanded
+    }
+
+    /// 展開したままにするのをやめる。マウスが外にあれば、少し待って縮む。
+    public mutating func unpin(at now: Date) {
+        guard isPinned else { return }
+        isPinned = false
+        if state == .expanded && !isHovering {
+            schedule(restingState, after: configuration.collapseDelay, from: now)
+        }
+    }
+
+    /// 展開中にすぐ縮める（Esc キーなど）。留めていても縮める。
     public mutating func collapse() {
+        isPinned = false
         cancelPending()
         state = restingState
     }

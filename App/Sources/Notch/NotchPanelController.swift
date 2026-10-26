@@ -28,6 +28,8 @@ final class NotchPanelController {
     private var lastPointerUpdate = ContinuousClock.now - .seconds(1)
     /// この時刻までは peek の `notice` を鳴らさない（`playAlert` で代わりの音を鳴らした直後）。
     private var noticeSoundSuppressedUntil: Date?
+    /// クイック入力の前に前面にあったアプリ。入力を終えたらキー入力を返す。
+    private var appBeforeQuickInput: NSRunningApplication?
 
     init(model: NotchModel) {
         self.model = model
@@ -70,6 +72,14 @@ final class NotchPanelController {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.relayout() }
         })
+        // ほかのアプリやウインドウを押してパネルがキーでなくなったら、入力を終える（縮むのはマウスが離れてから）。
+        observers.append(NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.endQuickInput(collapse: false) }
+        })
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
             object: nil,
@@ -108,6 +118,41 @@ final class NotchPanelController {
         model.displayChoice = choice
         UserDefaults.standard.set(choice.rawValue, forKey: Self.displayChoiceKey)
         relayout()
+    }
+
+    // MARK: - クイック入力（ROADMAP 3-5）
+
+    /// ノッチを展開したまま留め、パネルでキー入力を受ける（入力欄を押したとき・ショートカット）。
+    func beginQuickInput() {
+        guard model.layout != nil else { return }
+        if !model.isQuickInputActive {
+            let front = NSWorkspace.shared.frontmostApplication
+            appBeforeQuickInput = front?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : front
+        }
+        model.isQuickInputActive = true
+        panel.acceptsKeyInput = true
+        machine.pin()
+        applyMachine()
+        // 操作しないパネルなので、アプリを前面に出さずにキー入力だけを受ける。
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    /// 入力を終える。`collapse` ならすぐ縮める（Esc・開始したあと）。
+    func endQuickInput(collapse: Bool) {
+        guard model.isQuickInputActive else { return }
+        model.isQuickInputActive = false
+        panel.acceptsKeyInput = false
+        if collapse {
+            machine.collapse()
+        } else {
+            machine.unpin(at: .now)
+        }
+        if panel.isKeyWindow {
+            panel.resignKey()
+            appBeforeQuickInput?.activate()
+        }
+        appBeforeQuickInput = nil
+        processPointer()
     }
 
     // MARK: - 配置

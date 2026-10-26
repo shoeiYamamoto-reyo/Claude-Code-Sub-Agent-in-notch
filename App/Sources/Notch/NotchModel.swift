@@ -65,6 +65,23 @@ final class NotchModel {
     @ObservationIgnored var onStopTask: ((UUID) -> Void)?
     /// タスクの行を押したとき（`TaskResultViewer.show`）。
     @ObservationIgnored var onShowTask: ((UUID) -> Void)?
+
+    // MARK: - クイック入力（ROADMAP 3-5）
+
+    /// ノッチで指示を入力しているか。この間はパネルがキー入力を受け、マウスが離れても縮まない。
+    var isQuickInputActive = false
+    /// 入力中の指示。縮んでも消さない（開始したら空にする）。
+    var quickInputDraft = ""
+    /// 入力を始めるショートカットの表示（登録できなければ nil）。
+    var quickInputShortcut: String?
+    /// 最後にタスクを始めたプロジェクト（次の既定値）。変更は `TaskLauncher` だけが行う。
+    var lastTaskProjectID: Project.ID?
+    /// 入力欄を押したとき・ショートカット（`NotchPanelController.beginQuickInput`）。
+    @ObservationIgnored var onBeginQuickInput: (() -> Void)?
+    /// Esc・開始したあと（`NotchPanelController.endQuickInput`）。
+    @ObservationIgnored var onEndQuickInput: (() -> Void)?
+    /// 「開始」。始められなければ理由を返す（`TaskLauncher.start`）。
+    @ObservationIgnored var onQuickStart: ((_ projectID: Project.ID, _ agent: String?, _ prompt: String) -> String?)?
 }
 
 enum ReceiverStatus: Equatable {

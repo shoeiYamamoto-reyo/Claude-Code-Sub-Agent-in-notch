@@ -37,12 +37,14 @@ final class ApprovalHotKeys {
         }
     }
 
-    private func handle(_ id: EventHotKeyID) {
+    /// 自分のホットキーなら true（他のホットキーは次のハンドラに回す。`QuickInputHotKey`）。
+    private func handle(_ id: EventHotKeyID) -> Bool {
         guard id.signature == Self.signature,
               let shortcut = ApprovalShortcut.allCases.first(where: { $0.hotKeyID == id.id }),
               registered[shortcut] != nil
-        else { return }
+        else { return false }
         onPress?(shortcut)
+        return true
     }
 
     private func installHandlerIfNeeded() {
@@ -58,10 +60,10 @@ final class ApprovalHotKeys {
             )
             guard status == noErr else { return status }
             // アプリのイベントターゲットのハンドラはメインスレッドで呼ばれる。
-            MainActor.assumeIsolated {
+            let handled = MainActor.assumeIsolated {
                 Unmanaged<ApprovalHotKeys>.fromOpaque(context).takeUnretainedValue().handle(id)
             }
-            return noErr
+            return handled ? noErr : OSStatus(eventNotHandledErr)
         }, 1, &spec, context, &handler)
     }
 
