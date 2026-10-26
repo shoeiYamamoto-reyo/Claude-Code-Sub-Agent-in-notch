@@ -79,6 +79,9 @@ private struct IslandContent: View {
                 ExpandedTabBar(selection: $tab)
                 switch tab {
                 case .sessions:
+                    if !model.tasks.isEmpty {
+                        TaskRunListView(tasks: model.tasks, onStop: { model.onStopTask?($0) })
+                    }
                     SessionListView(
                         sessions: model.sessions,
                         projects: model.projects,
@@ -93,7 +96,8 @@ private struct IslandContent: View {
                         sessions: model.sessions,
                         loadError: model.projectLoadError,
                         onAdd: { model.onAddProject?() },
-                        onEdit: { model.onEditProject?($0) }
+                        onEdit: { model.onEditProject?($0) },
+                        onStartTask: { model.onStartTask?($0) }
                     )
                 case .agents:
                     AgentListView(
