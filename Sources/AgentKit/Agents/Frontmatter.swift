@@ -63,6 +63,11 @@ public struct Frontmatter: Sendable, Equatable {
     var sourceLines: [String] = []
     /// `set` で消した項目の元の行。
     var removedLines: [Range<Int>] = []
+    /// 元のテキストの開き・閉じの行（`---`、閉じは `...` のこともある）。書き出しで同じものを使う。
+    public internal(set) var openingLine = "---"
+    public internal(set) var closingLine = "---"
+    /// 閉じる行の後ろに改行が無く、ファイルがそこで終わっていたか。
+    public internal(set) var endsAtClosingLine = false
 
     public init(entries: [Entry] = []) {
         self.entries = entries
@@ -96,6 +101,9 @@ public struct Frontmatter: Sendable, Equatable {
         let body = lines[(closing + 1)...].joined(separator: "\n")
         var frontmatter = Frontmatter(entries: entries)
         frontmatter.sourceLines = lines[1..<closing].map(String.init)
+        frontmatter.openingLine = String(first)
+        frontmatter.closingLine = String(lines[closing])
+        frontmatter.endsAtClosingLine = closing == lines.count - 1
         return (frontmatter, body)
     }
 
@@ -263,7 +271,7 @@ public struct Frontmatter: Sendable, Equatable {
     }
 
     private static func quoted(_ text: String) -> String {
-        // `"` を含む 1 行の値は '...' にする（読み取りでコメントの判定を誤らないよう、エスケープした `"` を避ける）。
+        // `"` を含み `'` を含まない 1 行の値は、エスケープの要らない '...' にする。
         if text.contains("\""), !text.contains("'"), !text.contains(where: { $0.isNewline || $0 == "\t" }) {
             return "'" + text + "'"
         }
@@ -306,17 +314,31 @@ public struct Frontmatter: Sendable, Equatable {
 
     /// クォートの外にある ` #` 以降を落とす。
     private static func stripComment(_ text: String) -> String {
+        let characters = Array(text)
         var inQuote: Character?
         var previous: Character = " "
-        for (offset, character) in text.enumerated() {
+        var offset = 0
+        while offset < characters.count {
+            let character = characters[offset]
             if let quote = inQuote {
-                if character == quote { inQuote = nil }
+                if quote == "\"", character == "\\" {
+                    // `\"` などのエスケープは閉じない。
+                    offset += 1
+                } else if character == quote {
+                    if quote == "'", offset + 1 < characters.count, characters[offset + 1] == "'" {
+                        // '...' の中の `''` は `'` 1 文字。
+                        offset += 1
+                    } else {
+                        inQuote = nil
+                    }
+                }
             } else if character == "\"" || character == "'" {
                 if previous == " " || offset == 0 { inQuote = character }
             } else if character == "#", previous == " " || previous == "\t" || offset == 0 {
-                return String(text.prefix(offset))
+                return String(characters[..<offset])
             }
             previous = character
+            offset += 1
         }
         return text
     }

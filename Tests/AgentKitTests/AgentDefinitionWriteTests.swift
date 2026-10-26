@@ -157,6 +157,7 @@ final class AgentDefinitionWriteTests: XCTestCase {
             "a: b", "ends with:", "a #b", "#tag", "- item", "[x]", "{x}", "*ref", "!tag", "|", ">", "@at", "%p", "`code`",
             #"He said "hi""#, #"it's "both""#, "tab\there", "back\\slash", "日本語: 説明",
             "line 1\n\nline 3\n", "two trailing\n\n", "  indented\n  block", "trailing space \nnext",
+            #"it's "both" #tag"#, #"say "a" #b"#, "a'' #b", #"x 'y' "z" #w"#,
         ]
         for value in values {
             var frontmatter = Frontmatter()
@@ -169,6 +170,41 @@ final class AgentDefinitionWriteTests: XCTestCase {
                 XCTAssertEqual(parsed["tools"], .list([value, "Read"]), "\(value.debugDescription) → \(text)")
             }
         }
+    }
+
+    func testQuotesKeepCommentMarkers() throws {
+        let (frontmatter, _) = try Frontmatter.parse(#"""
+        ---
+        single: 'it''s #fine' # comment
+        double: "say \"hi\" #fine" # comment
+        ---
+        """#)
+        XCTAssertEqual(frontmatter["single"], .string("it's #fine"))
+        XCTAssertEqual(frontmatter["double"], .string(#"say "hi" #fine"#))
+    }
+
+    func testDelimitersAreKept() throws {
+        let dots = "---\nname: a\ndescription: d\n...\nbody\n"
+        XCTAssertEqual(try definition(dots).render(), dots)
+        let noNewline = "---\nname: a\ndescription: d\n---"
+        XCTAssertEqual(try definition(noNewline).render(), noNewline)
+        var edited = try definition(noNewline)
+        edited.body = "body"
+        XCTAssertEqual(edited.render(), "---\nname: a\ndescription: d\n---\nbody")
+    }
+
+    /// `tools: []`（ツールなし）と項目なし（親のツールを引き継ぐ）は別のもの。
+    func testEmptyToolListIsKept() throws {
+        let none = "---\nname: a\ndescription: d\ntools: []\n---\n"
+        let agent = try definition(none)
+        XCTAssertEqual(agent.tools, [])
+        XCTAssertEqual(agent.render(), none)
+
+        var cleared = try definition("---\nname: a\ndescription: d\ntools: Read\n---\n")
+        cleared.tools = []
+        XCTAssertEqual(cleared.render(), none)
+        cleared.tools = nil
+        XCTAssertEqual(cleared.render(), "---\nname: a\ndescription: d\n---\n")
     }
 
     func testFrontmatterSetIsNoOpForSameValue() throws {

@@ -107,7 +107,7 @@ public struct AgentDefinition: Sendable, Equatable {
     // MARK: - 書き出し（ROADMAP 4-1）
 
     /// ファイルの内容に戻す。`frontmatter` を土台に、値が変わった項目だけを書き直す。
-    /// 未知の項目・順序・コメント・本文はそのまま残り、何も変えなければ読んだときと同じテキストになる
+    /// 未知の項目・順序・コメント・区切りの行・本文はそのまま残り、何も変えなければ読んだときと同じテキストになる
     /// （改行は LF、BOM なし）。
     public func render() -> String {
         var frontmatter = self.frontmatter
@@ -127,14 +127,15 @@ public struct AgentDefinition: Sendable, Equatable {
                 frontmatter.set(key, value.map { .string($0) })
             }
         }
-        return "---\n" + frontmatter.render() + "---\n" + body
+        let afterClosing = frontmatter.endsAtClosingLine && body.isEmpty ? "" : "\n"
+        return frontmatter.openingLine + "\n" + frontmatter.render() + frontmatter.closingLine + afterClosing + body
     }
 
     /// ツールの一覧を書く。前と同じなら書き方を変えない。新しく書くときは、元がリストならリスト、
-    /// そうでなければカンマ区切り（名前にカンマを含むときはリスト）。
+    /// そうでなければカンマ区切り（名前にカンマを含むとき・空のときはリスト）。
+    /// nil（項目なし: 親のツールを引き継ぐ）と空の一覧（`[]`）は区別する。
     private static func setToolList(_ key: String, _ tools: [String]?, in frontmatter: inout Frontmatter) {
-        let tools = tools?.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        let normalized = tools?.isEmpty == true ? nil : tools
+        let normalized = tools?.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         guard toolList(frontmatter[key]) != normalized else { return }
         guard let normalized else {
             frontmatter.set(key, nil)
@@ -142,7 +143,7 @@ public struct AgentDefinition: Sendable, Equatable {
         }
         if case .list = frontmatter[key] {
             frontmatter.set(key, .list(normalized))
-        } else if normalized.contains(where: { $0.contains(",") }) {
+        } else if normalized.isEmpty || normalized.contains(where: { $0.contains(",") }) {
             frontmatter.set(key, .list(normalized))
         } else {
             frontmatter.set(key, .string(normalized.joined(separator: ", ")))
