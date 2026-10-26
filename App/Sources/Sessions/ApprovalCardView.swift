@@ -219,7 +219,7 @@ private struct QuestionBody: View {
     }
 }
 
-private struct CardButtonStyle: ButtonStyle {
+struct CardButtonStyle: ButtonStyle {
     let tint: Color
     var prominent = false
     @Environment(\.isEnabled) private var isEnabled

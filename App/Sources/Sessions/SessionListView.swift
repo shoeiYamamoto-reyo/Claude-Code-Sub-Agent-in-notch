@@ -6,6 +6,7 @@ struct SessionListView: View {
     let sessions: [Session]
     let receiver: ReceiverStatus
     let installStatus: HookInstaller.Status?
+    let onInstallHooks: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -64,16 +65,25 @@ struct SessionListView: View {
                     .foregroundStyle(.white.opacity(0.6))
             case .outdated:
                 Text("hooks の登録内容が古くなっています。")
-                Text("メニューバーのアイコン →「hooks をインストール…」で更新してください。")
+                Text("下のボタン（またはメニューバーのアイコン →「hooks を再インストール…」）で更新してください。")
                     .foregroundStyle(.white.opacity(0.6))
+                installButton("hooks を更新…")
             case .notInstalled, nil:
                 Text("まだ hooks がインストールされていません。")
-                Text("メニューバーのアイコン →「hooks をインストール…」から登録すると、Claude Code のセッションが表示されます。")
+                Text("下のボタン（またはメニューバーのアイコン →「hooks をインストール…」）から登録すると、Claude Code のセッションが表示されます。")
                     .foregroundStyle(.white.opacity(0.6))
+                installButton("hooks をインストール…")
             }
         }
         .font(.callout)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// 書き込む前に差分の確認ウインドウが出るので、ここで押しても settings.json はまだ変わらない。
+    private func installButton(_ title: String) -> some View {
+        Button(title, action: onInstallHooks)
+            .buttonStyle(CardButtonStyle(tint: .orange, prominent: true))
+            .padding(.top, 6)
     }
 }
 

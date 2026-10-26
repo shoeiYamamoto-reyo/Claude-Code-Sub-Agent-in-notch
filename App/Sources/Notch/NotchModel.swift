@@ -28,6 +28,8 @@ final class NotchModel {
     var approvals: [ApprovalRequest] = []
     /// 承認カードのボタンが押されたときの処理（`HookCenter.respond`）。
     @ObservationIgnored var onApprovalReply: ((_ requestID: Int, _ reply: HookReply) -> Void)?
+    /// ノッチの「hooks をインストール…」ボタン（`HookSetup.beginInstall`）。メニューバーのアイコンがノッチに隠れる画面向け。
+    @ObservationIgnored var onInstallHooks: (() -> Void)?
     /// 受信した hook をファイルに記録しているか（開発用）。
     var isCapturingEvents = false
 }

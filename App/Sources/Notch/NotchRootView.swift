@@ -77,7 +77,8 @@ private struct IslandContent: View {
                 SessionListView(
                     sessions: model.sessions,
                     receiver: model.receiver,
-                    installStatus: model.hookInstallStatus
+                    installStatus: model.hookInstallStatus,
+                    onInstallHooks: { model.onInstallHooks?() }
                 )
             }
         }

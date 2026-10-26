@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.start()
         hookCenter.start()
         hookSetup.refreshStatus()
+        model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
