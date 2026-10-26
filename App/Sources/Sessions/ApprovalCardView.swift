@@ -78,21 +78,29 @@ private struct PermissionBody: View {
                 .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
             }
             HStack(spacing: 8) {
-                Button("ターミナルで答える") { onReply(.pass) }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .help("ノッチでは答えず、Claude Code の通常の確認に任せます")
-                Spacer()
-                Button("拒否") { onReply(HookReply(decision: .deny)) }
-                    .buttonStyle(CardButtonStyle(tint: .red))
-                if let alwaysAllow {
-                    Button("常に許可") { onReply(HookReply(decision: .always)) }
-                        .buttonStyle(CardButtonStyle(tint: .blue))
-                        .help("許可し、今後も確認しないようにします: \(alwaysAllow)")
+                Button { onReply(ApprovalShortcut.terminal.reply) } label: {
+                    ShortcutLabel(title: "ターミナルで答える", shortcut: .terminal)
                 }
-                Button("許可") { onReply(HookReply(decision: .allow)) }
-                    .buttonStyle(CardButtonStyle(tint: .green, prominent: true))
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.6))
+                .help("ノッチでは答えず、Claude Code の通常の確認に任せます")
+                Spacer()
+                Button { onReply(ApprovalShortcut.deny.reply) } label: {
+                    ShortcutLabel(title: "拒否", shortcut: .deny)
+                }
+                .buttonStyle(CardButtonStyle(tint: .red))
+                if let alwaysAllow {
+                    Button { onReply(ApprovalShortcut.alwaysAllow.reply) } label: {
+                        ShortcutLabel(title: "常に許可", shortcut: .alwaysAllow)
+                    }
+                    .buttonStyle(CardButtonStyle(tint: .blue))
+                    .help("許可し、今後も確認しないようにします: \(alwaysAllow)")
+                }
+                Button { onReply(ApprovalShortcut.allow.reply) } label: {
+                    ShortcutLabel(title: "許可", shortcut: .allow)
+                }
+                .buttonStyle(CardButtonStyle(tint: .green, prominent: true))
             }
             if let alwaysAllow {
                 Text("常に許可: \(alwaysAllow)")
@@ -216,6 +224,21 @@ private struct QuestionBody: View {
             result[question.question] = AskQuestion.answerText(for: ordered)
         }
         return result
+    }
+}
+
+/// ボタンの名前に、グローバルなショートカット（`ApprovalHotKeys`）を小さく添える。
+private struct ShortcutLabel: View {
+    let title: String
+    let shortcut: ApprovalShortcut
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+            Text(shortcut.label)
+                .font(.caption2.weight(.regular))
+                .opacity(0.6)
+        }
     }
 }
 
