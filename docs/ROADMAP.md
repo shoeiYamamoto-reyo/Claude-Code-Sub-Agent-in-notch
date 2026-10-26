@@ -28,11 +28,11 @@
 | --- | --- | --- | --- | --- |
 | 1-1 | ☑ ノッチパネル: NSPanel の配置（ノッチ有無・複数ディスプレイ）、`character / peek / expanded` の状態機械、ホバーで展開・離れて縮む、非展開時はクリック透過 | swift-macos-engineer | ノッチ有り・無しの両方で正しい位置に出る | 状態機械は `swift test`、表示は手動 |
 | 1-2 | ☑ キャラクター: `docs/design/character.md` のとおり `Canvas` で描画、5 状態の表情、マウス追従、待機中の低頻度アニメーション | swift-macos-engineer | 待機中 CPU ほぼ 0 %（アクティビティモニタで確認） | 手動 |
-| 1-3 | ☐ `HookEvent` モデルとデコード（未知イベントも落ちない） | swift-macos-engineer | 実ペイロードのフィクスチャをすべてデコードできる | `swift test` |
-| 1-4 | ☐ `notch-hook` 中継 CLI（送信のみ、アプリ不在で即終了） | swift-macos-engineer | ソケット不在時に 100 ms 以内で exit 0 | `swift test`（タイムアウト試験） |
-| 1-5 | ☐ `SessionStore`（セッション／サブエージェントの状態集約、停止判定） | swift-macos-engineer | イベント列 → 期待状態のテーブルテストが通る | `swift test` |
-| 1-6 | ☐ ソケットサーバー（アプリ側）とセッション一覧・サブエージェントツリーの UI、キャラクターの状態連動 | swift-macos-engineer | 中継 CLI から送ったイベントが表示に反映される | 結合テスト + 手動 |
-| 1-7 | ☐ hooks インストーラ（バックアップ → マージ → 差分 → 確認、アンインストール） | swift-macos-engineer | 既存設定が失われないことをテストで保証 | `swift test`（マージ処理）+ 手動 |
+| 1-3 | ☑ `HookEvent` モデルとデコード（未知イベントも落ちない） | swift-macos-engineer | 実ペイロードのフィクスチャをすべてデコードできる | `swift test` |
+| 1-4 | ☑ `notch-hook` 中継 CLI（送信のみ、アプリ不在で即終了） | swift-macos-engineer | ソケット不在時に 100 ms 以内で exit 0 | `swift test`（タイムアウト試験） |
+| 1-5 | ☑ `SessionStore`（セッション／サブエージェントの状態集約、停止判定） | swift-macos-engineer | イベント列 → 期待状態のテーブルテストが通る | `swift test` |
+| 1-6 | ☑ ソケットサーバー（アプリ側）とセッション一覧・サブエージェントツリーの UI、キャラクターの状態連動 | swift-macos-engineer | 中継 CLI から送ったイベントが表示に反映される | 結合テスト + 手動 |
+| 1-7 | ☑ hooks インストーラ（バックアップ → マージ → 差分 → 確認、アンインストール） | swift-macos-engineer | 既存設定が失われないことをテストで保証 | `swift test`（マージ処理）+ 手動 |
 | 1-8 | ☑ 効果音（F0-6）とおやすみモード（F0-8）: オリジナル音の合成、開閉・お知らせ・完了・エラーで鳴らす、メニューの「サウンド」で設定。設計は `docs/design/sound.md` | swift-macos-engineer | 設定どおりに鳴る／鳴らない。待機中 CPU ほぼ 0 % のまま | `swift test`（音の対応・判定・合成）+ 手動 |
 
 ## M2. 承認
@@ -62,6 +62,7 @@
 - ログイン時起動、設定画面（サウンド設定をメニューから移す）、集中モードとの連動、差分表示（F3-6）。
 - タスク履歴（F3-8）、テンプレート（F2-6）、git worktree での並行実行（F2-5）、ターミナルで開く（F2-7）。
 - 公開時: 英語対応、アプリ署名と公証、README のインストール手順、リリース自動化。
+- 待機中の CPU 使用率（課題）: 2026-10-26 に手元の Mac（Debug ビルド）で測ると、待機中（`idle`）でも約 5 %、作業中は約 8 %（`top` で 2 秒ごとに 10 回）。待機中も 12 fps で `Canvas` を描き直し続けているのが主な原因とみられる（`CharacterAnimation.frameInterval`）。目のマウス追従はこのままにする前提で、待機中の描き直しを止める・間隔を広げるなどを検討する。REQUIREMENTS の性能目標（ほぼ 0 %）は未達。
 
 ## M6. 他アプリの通知（拡張）
 方針は [external-notifications.md](external-notifications.md)。6-1〜6-4 は M2 の後ならいつでも着手できる（ソケットと承認キューの優先度付けが前提）。
