@@ -100,21 +100,15 @@ public struct TaskResult: Sendable, Equatable {
 
 /// stream-json を流し込んで、結果の表示に使う内容をまとめる（ROADMAP 3-4、F2-3）。値型。
 public struct TaskTranscript: Sendable, Equatable {
-    /// ファイルを書き換えるツールと、その入力でパスを持つキー。
-    public static let fileEditingTools: [String: String] = [
-        "Edit": "file_path",
-        "MultiEdit": "file_path",
-        "Write": "file_path",
-        "NotebookEdit": "notebook_path",
-    ]
-
     public private(set) var sessionID: String?
     public private(set) var model: String?
     public private(set) var cwd: String?
     /// メインの会話の最後の応答（サブエージェントの中のものは含めない）。
     public private(set) var lastAssistantText: String?
-    /// 成功した編集で変わったファイル（最初に変わった順、重複なし）。サブエージェントの編集も含む。
-    public private(set) var changedFiles: [String] = []
+    /// 成功した編集で変わったファイルと差分（最初に変わった順、ROADMAP 5-3）。サブエージェントの編集も含む。
+    public private(set) var fileChanges: [FileChange] = []
+    /// 成功した編集で変わったファイル（最初に変わった順、重複なし）。
+    public var changedFiles: [String] { fileChanges.map(\.path) }
     /// メインの会話で今動いているツール（結果が来るまで）。
     public private(set) var currentTool: StreamJSONEvent.ToolUse?
     public private(set) var toolUseCount = 0
@@ -122,8 +116,8 @@ public struct TaskTranscript: Sendable, Equatable {
     /// JSON として読めなかった行の数。
     public private(set) var unreadableLines = 0
 
-    /// 結果待ちの編集（tool_use の ID → パス）。
-    private var pendingEdits: [String: String] = [:]
+    /// 結果待ちの編集（tool_use の ID → 差分）。
+    private var pendingEdits: [String: FileEdit] = [:]
 
     public init() {}
 
@@ -154,8 +148,8 @@ public struct TaskTranscript: Sendable, Equatable {
         case .assistant(let texts, let toolUses, let parent):
             toolUseCount += toolUses.count
             for use in toolUses {
-                if let key = Self.fileEditingTools[use.name], let path = use.input[key]?.stringValue, !path.isEmpty {
-                    pendingEdits[use.id] = path
+                if let edit = FileEdit.from(toolName: use.name, input: use.input) {
+                    pendingEdits[use.id] = edit
                 }
             }
             guard parent == nil else { return }
@@ -164,9 +158,8 @@ public struct TaskTranscript: Sendable, Equatable {
             if let last = toolUses.last { currentTool = last }
         case .toolResults(let results, _):
             for toolResult in results {
-                if let path = pendingEdits.removeValue(forKey: toolResult.toolUseID), !toolResult.isError,
-                   !changedFiles.contains(path) {
-                    changedFiles.append(path)
+                if let edit = pendingEdits.removeValue(forKey: toolResult.toolUseID), !toolResult.isError {
+                    FileChange.record(edit, in: &fileChanges)
                 }
                 if currentTool?.id == toolResult.toolUseID { currentTool = nil }
             }

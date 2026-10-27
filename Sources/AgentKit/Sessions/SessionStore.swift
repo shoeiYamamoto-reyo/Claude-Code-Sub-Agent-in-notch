@@ -5,6 +5,8 @@ import Foundation
 /// 値型で、時刻は引数で受け取る（テストで時間を進められるように）。タイマーは持たない。
 /// 「一定時間音沙汰が無い」の判定は、呼び出し側が `nextExpiry` の時刻に `expire(now:)` を呼ぶ。
 public struct SessionStore: Sendable, Equatable {
+    /// セッションのファイルごとに詳細を残す編集の数。
+    public static let maxEditsPerFile = 20
     public static let maxRecentTools = 30
 
     /// 作業中のまま、この時間イベントが無ければ「停止」にする（`Stop` の取りこぼし。F3-5）。
@@ -58,6 +60,7 @@ public struct SessionStore: Sendable, Equatable {
             if event.source == "clear" {
                 session.subagents = []
                 session.recentTools = []
+                session.fileChanges = []
                 session.lastPrompt = nil
                 session.lastAssistantMessage = nil
             }
@@ -97,6 +100,9 @@ public struct SessionStore: Sendable, Equatable {
 
         case .postToolUse, .postToolUseFailure:
             let failed = event.name == .postToolUseFailure
+            if !failed, let edit = FileEdit.from(toolName: event.toolName ?? "", input: event.toolInput) {
+                FileChange.record(edit, in: &session.fileChanges, keepingEdits: Self.maxEditsPerFile)
+            }
             if let toolUseID = event.toolUseID, let index = session.recentTools.lastIndex(where: { $0.id == toolUseID }) {
                 session.recentTools[index].status = failed ? .failed : .succeeded
                 session.recentTools[index].endedAt = now
