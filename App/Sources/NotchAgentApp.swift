@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var hookSetup = HookSetup(model: model)
     lazy var projectCenter = ProjectCenter(model: model)
     lazy var agentLibrary = AgentLibrary(model: model)
+    lazy var agentEditor = AgentEditor(model: model)
     lazy var claudeSetup = ClaudeSetup(model: model)
     lazy var taskRunner = TaskRunner(model: model, claude: claudeSetup)
     lazy var taskLauncher = TaskLauncher(model: model, runner: taskRunner)
@@ -43,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         projectCenter.load()
         // 定義は「エージェント」タブを開いたときに読む（ここでは受け口だけ用意する）。
         _ = agentLibrary
+        _ = agentEditor
         claudeSetup.start()
         _ = taskLauncher
         _ = taskResultViewer

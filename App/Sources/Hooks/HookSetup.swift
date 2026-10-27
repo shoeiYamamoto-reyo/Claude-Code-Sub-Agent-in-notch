@@ -195,12 +195,13 @@ final class HookSetup {
     }
 }
 
-/// 書き込む前の確認画面。差分を見せ、ボタンを押したときだけ書く。
-private struct SettingsDiffView: View {
+/// 書き込む前の確認画面。差分を見せ、ボタンを押したときだけ書く（hooks の設定とエージェント定義で使う）。
+struct SettingsDiffView: View {
     let title: String
     let message: String
     let edit: SettingsFileEdit
     let actionTitle: String
+    var cancelTitle = "キャンセル"
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -235,7 +236,7 @@ private struct SettingsDiffView: View {
 
             HStack {
                 Spacer()
-                Button("キャンセル", role: .cancel, action: onCancel)
+                Button(cancelTitle, role: .cancel, action: onCancel)
                     .keyboardShortcut(.cancelAction)
                 Button(actionTitle, action: onConfirm)
                     .keyboardShortcut(.defaultAction)
@@ -246,7 +247,7 @@ private struct SettingsDiffView: View {
     }
 }
 
-private struct DiffLineView: View {
+struct DiffLineView: View {
     let line: LineDiff.Line?
 
     var body: some View {

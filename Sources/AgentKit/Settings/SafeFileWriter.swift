@@ -15,6 +15,16 @@ public struct SettingsFileEdit: Sendable, Equatable {
     /// 変更案を作ったときのファイルの中身。ファイルが無ければ nil。
     public let originalData: Data?
     public let newData: Data
+    /// ファイルを新しく作るときのパーミッション（設定ファイルは 0600、エージェント定義は 0644）。
+    public let newFilePermissions: Int
+
+    public init(displayPath: String, targetPath: String, originalData: Data?, newData: Data, newFilePermissions: Int = 0o600) {
+        self.displayPath = displayPath
+        self.targetPath = targetPath
+        self.originalData = originalData
+        self.newData = newData
+        self.newFilePermissions = newFilePermissions
+    }
 
     public var hasChanges: Bool { originalData != newData }
 
@@ -29,7 +39,7 @@ public struct SettingsFileEdit: Sendable, Equatable {
 /// - ファイルが無ければ空のオブジェクトとして扱う。あるのに JSON として読めなければ何もしない。
 /// - 書く直前にファイルが変わっていたら書かない（別のツールや手編集との競合）。
 /// - 書く前に日付付きのバックアップを同じフォルダに作る。
-/// - シンボリックリンクならリンク先に書き、リンクは保つ。パーミッションは保つ（新規は 0600）。
+/// - シンボリックリンクならリンク先に書き、リンクは保つ。パーミッションは保つ（新規は `newFilePermissions`）。
 public enum SafeFileWriter {
     public enum WriteError: Error, Equatable {
         case unreadable(String)
@@ -77,7 +87,7 @@ public enum SafeFileWriter {
 
         let fileManager = FileManager.default
         let directory = (edit.targetPath as NSString).deletingLastPathComponent
-        var permissions: Int = 0o600
+        var permissions = edit.newFilePermissions
         var backupPath: String?
 
         if let original = edit.originalData {

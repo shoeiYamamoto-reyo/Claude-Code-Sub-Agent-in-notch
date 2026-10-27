@@ -3,9 +3,14 @@ import AppKit
 import SwiftUI
 
 /// 展開時の「エージェント」タブ（F1-3 / F5-1）。ユーザー共通の定義と、登録プロジェクトごとの定義を並べる。
+/// 行を押すと編集、各見出しの「＋」で新規作成（F5-2 / F5-3、`AgentEditor`）。
 struct AgentListView: View {
     let overview: AgentOverview?
     let onRefresh: () -> Void
+    /// 定義ファイルのパスと、それを読んだ `.claude/agents` フォルダ。
+    let onEdit: (String, String) -> Void
+    /// 置く `.claude/agents` フォルダと、置き場所の名前。
+    let onNew: (String, String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -23,14 +28,25 @@ struct AgentListView: View {
                             title: "ユーザー共通",
                             subtitle: "~/.claude/agents",
                             entries: overview.user,
-                            emptyText: "定義はありません。"
+                            emptyText: "定義はありません。",
+                            onEdit: onEdit,
+                            onNew: {
+                                onNew(AgentCatalog.userAgentDirectory(home: NSHomeDirectory()), "ユーザー共通")
+                            }
                         )
                         ForEach(overview.projects) { item in
                             AgentSection(
                                 title: item.project.name,
                                 subtitle: ProjectPath.abbreviate(item.project.directory) + "/.claude/agents",
                                 entries: item.entries,
-                                emptyText: "このプロジェクトの定義はありません（ユーザー共通のものが使えます）。"
+                                emptyText: "このプロジェクトの定義はありません（ユーザー共通のものが使えます）。",
+                                onEdit: onEdit,
+                                onNew: {
+                                    let directories = AgentCatalog.projectAgentDirectories(
+                                        for: item.project.directory, home: NSHomeDirectory()
+                                    )
+                                    if let directory = directories.first { onNew(directory, item.project.name) }
+                                }
                             )
                         }
                     }
@@ -53,6 +69,8 @@ private struct AgentSection: View {
     let subtitle: String
     let entries: [AgentCatalog.Entry]
     let emptyText: String
+    let onEdit: (String, String) -> Void
+    let onNew: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -65,6 +83,12 @@ private struct AgentSection: View {
                     .foregroundStyle(.white.opacity(0.45))
                     .lineLimit(1)
                     .truncationMode(.head)
+                Spacer(minLength: 4)
+                Button(action: onNew) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(CardButtonStyle(tint: .white))
+                .help("\(title) にサブエージェントを作る")
             }
             if entries.isEmpty {
                 Text(emptyText)
@@ -73,7 +97,7 @@ private struct AgentSection: View {
                     .padding(.leading, 10)
             } else {
                 ForEach(entries) { entry in
-                    AgentRow(entry: entry)
+                    AgentRow(entry: entry, onEdit: { onEdit(entry.path, entry.directory) })
                         .padding(.leading, 10)
                 }
             }
@@ -83,6 +107,7 @@ private struct AgentSection: View {
 
 private struct AgentRow: View {
     let entry: AgentCatalog.Entry
+    let onEdit: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -126,8 +151,14 @@ private struct AgentRow: View {
             }
         }
         .opacity(entry.shadowedBy == nil ? 1 : 0.55)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        // 読めない定義はフォームで直せないので、押しても開かない（Finder から直す）。
+        .onTapGesture { if entry.definition != nil { onEdit() } }
         .contextMenu {
+            if entry.definition != nil {
+                Button("編集…", action: onEdit)
+            }
             Button("Finder で表示") {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: entry.path)])
             }

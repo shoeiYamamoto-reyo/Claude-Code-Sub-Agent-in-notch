@@ -56,7 +56,7 @@
 | # | タスク | 担当 | 完了条件 | テスト方法 |
 | --- | --- | --- | --- | --- |
 | 4-1 | ☑ `AgentDefinition` の生成（frontmatter 往復で内容が変わらない）と検証。`AgentDefinition.render` は読み込んだ frontmatter を土台に値が変わった項目だけを書き直し（`Frontmatter.set` / `render`）、未知の項目・順序・コメント・本文を残す。何も変えなければ同じテキストに戻る（改行は LF）。そのままでは別の意味に読まれる値はクォートし、複数行は `|` / `|-`。`validate` は Claude Code が読み飛ばす条件と同じフォルダの name の重なりをエラー、知らない model / effort / permissionMode / color などを警告にする | swift-macos-engineer | 往復テスト・検証テストが通る | `swift test` |
-| 4-2 | ☐ 作成・編集 UI（差分表示 → 確認 → バックアップ付き保存）、ファイル監視で自動更新 | swift-macos-engineer | 確認なしに書き込まれない | `swift test` + 手動 |
+| 4-2 | ☑ 作成・編集 UI（差分表示 → 確認 → バックアップ付き保存）、ファイル監視で自動更新。「エージェント」タブの行を押すと編集、見出しの「＋」で新規作成。`AgentFileStore.plan` が検証（同じフォルダの name・ファイル名の重なりを含む）と書き込み内容を作り、差分を見て「保存」を押したときだけ `SafeFileWriter.commit`（バックアップ、編集中にファイルが変わっていたら書かない、新規は 0644）。CRLF のファイルは CRLF のまま。今あるエージェントのフォルダだけを FSEvents で見張り、変わったら読み直す | swift-macos-engineer | 確認なしに書き込まれない | `swift test` + 手動 |
 
 ## M5. 仕上げ・公開準備
 - ログイン時起動、設定画面（サウンド設定をメニューから移す）、集中モードとの連動、差分表示（F3-6）。

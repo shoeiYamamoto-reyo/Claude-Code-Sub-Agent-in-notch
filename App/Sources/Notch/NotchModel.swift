@@ -52,6 +52,10 @@ final class NotchModel {
     var agentOverview: AgentOverview?
     /// 「エージェント」タブを開いたとき（`AgentLibrary.refresh`）。
     @ObservationIgnored var onRefreshAgents: (() -> Void)?
+    /// 定義を編集する（ファイルのパス、そのファイルを読んだ `.claude/agents` フォルダ）。`AgentEditor` が受ける。
+    @ObservationIgnored var onEditAgent: ((String, String) -> Void)?
+    /// 定義を新しく作る（置く `.claude/agents` フォルダ、ウインドウに出す置き場所の名前）。
+    @ObservationIgnored var onNewAgent: ((String, String) -> Void)?
 
     // MARK: - タスク（ROADMAP 3-3）
 

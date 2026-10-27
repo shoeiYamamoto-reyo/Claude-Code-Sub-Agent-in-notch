@@ -110,7 +110,9 @@ private struct IslandContent: View {
                 case .agents:
                     AgentListView(
                         overview: model.agentOverview,
-                        onRefresh: { model.onRefreshAgents?() }
+                        onRefresh: { model.onRefreshAgents?() },
+                        onEdit: { model.onEditAgent?($0, $1) },
+                        onNew: { model.onNewAgent?($0, $1) }
                     )
                     // 登録・編集・削除したプロジェクトの定義を出し直す。
                     .onChange(of: model.projects) { model.onRefreshAgents?() }
