@@ -208,7 +208,9 @@ public enum LineDiff {
 
     private static func lines(_ text: String) -> [String] {
         guard !text.isEmpty else { return [] }
-        var result = text.components(separatedBy: "\n")
+        // `\r\n` は Swift では 1 文字なので、文字単位の分割（Linux の `components(separatedBy:)`）では切れない。
+        // スカラーの `\n` で切り、`\r` は行に残す（macOS の NSString と同じ結果）。
+        var result = text.unicodeScalars.split(separator: "\n", omittingEmptySubsequences: false).map { String($0) }
         if result.last == "" { result.removeLast() }
         return result
     }
