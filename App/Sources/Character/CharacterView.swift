@@ -49,10 +49,12 @@ private struct CharacterSchedule: TimelineSchedule {
     }
 }
 
-private struct CharacterCanvas: View {
+/// 1 コマ分の絵。サブエージェントの一覧（`AgentListView`）では色を変えて使う。
+struct CharacterCanvas: View {
     let mood: CharacterMood
     let eyeOffset: EyeOffset
     let pose: CharacterPose
+    var palette: CharacterPalette = CharacterSpec.notchPalette
 
     var body: some View {
         Canvas { context, size in
@@ -70,7 +72,7 @@ private struct CharacterCanvas: View {
             context.scaleBy(x: pose.scaleX, y: pose.scaleY)
             context.translateBy(x: -anchor.x, y: -anchor.y)
 
-            context.fill(Self.bodyPath, with: .color(Color(hex: CharacterSpec.bodyColor)))
+            context.fill(Self.bodyPath, with: .color(Color(hex: palette.body)))
             let shadow = CharacterSpec.shadowCenter
             let radii = CharacterSpec.shadowRadii
             context.fill(
@@ -80,7 +82,7 @@ private struct CharacterCanvas: View {
                     width: radii.width * 2,
                     height: radii.height * 2
                 )),
-                with: .color(Color(hex: CharacterSpec.shadowColor))
+                with: .color(Color(hex: palette.shadow))
             )
 
             if mood == .idle {
@@ -139,7 +141,7 @@ private struct CharacterCanvas: View {
         }
     }
 
-    private static let bodyPath: Path = {
+    nonisolated static let bodyPath: Path = {
         var path = Path()
         for segment in CharacterSpec.bodySegments {
             switch segment {

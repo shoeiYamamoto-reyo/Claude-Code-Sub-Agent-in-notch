@@ -2,8 +2,10 @@ import AgentKit
 import AppKit
 import SwiftUI
 
-/// 展開時の「エージェント」タブ（F1-3 / F5-1）。ユーザー共通の定義と、登録プロジェクトごとの定義を並べる。
-/// 行を押すと編集、各見出しの「＋」で新規作成（F5-2 / F5-3、`AgentEditor`）。
+/// 展開時の「エージェント」タブ（F1-3 / F5-1、`docs/design/agent-characters.md`）。
+/// サブエージェントをノッチと同じ形のキャラにして、ユーザー共通と登録プロジェクトごとに並べる。
+/// 体の色は frontmatter の `color`。マウスを乗せると上の欄に詳細を出し、押すと編集、最後の「＋」で新規作成
+/// （F5-2 / F5-3、`AgentEditor`）。
 struct AgentListView: View {
     let overview: AgentOverview?
     let onRefresh: () -> Void
@@ -11,6 +13,9 @@ struct AgentListView: View {
     let onEdit: (String, String) -> Void
     /// 置く `.claude/agents` フォルダと、置き場所の名前。
     let onNew: (String, String) -> Void
+
+    /// マウスを乗せているキャラ。
+    @State private var hovered: AgentCatalog.Entry?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -21,6 +26,7 @@ struct AgentListView: View {
                 Button("再読み込み", action: onRefresh)
                     .buttonStyle(CardButtonStyle(tint: .white))
             }
+            AgentDetail(entry: hovered)
             if let overview {
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 10) {
@@ -29,6 +35,7 @@ struct AgentListView: View {
                             subtitle: "~/.claude/agents",
                             entries: overview.user,
                             emptyText: "定義はありません。",
+                            hovered: $hovered,
                             onEdit: onEdit,
                             onNew: {
                                 onNew(AgentCatalog.userAgentDirectory(home: NSHomeDirectory()), "ユーザー共通")
@@ -40,6 +47,7 @@ struct AgentListView: View {
                                 subtitle: ProjectPath.abbreviate(item.project.directory) + "/.claude/agents",
                                 entries: item.entries,
                                 emptyText: "このプロジェクトの定義はありません（ユーザー共通のものが使えます）。",
+                                hovered: $hovered,
                                 onEdit: onEdit,
                                 onNew: {
                                     let directories = AgentCatalog.projectAgentDirectories(
@@ -64,54 +72,13 @@ struct AgentListView: View {
     }
 }
 
-private struct AgentSection: View {
-    let title: String
-    let subtitle: String
-    let entries: [AgentCatalog.Entry]
-    let emptyText: String
-    let onEdit: (String, String) -> Void
-    let onNew: () -> Void
+/// マウスを乗せているキャラの詳細。高さを固定して、乗せ替えても一覧が動かないようにする。
+private struct AgentDetail: View {
+    let entry: AgentCatalog.Entry?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(title)
-                    .font(.callout.weight(.semibold))
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.45))
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                Spacer(minLength: 4)
-                Button(action: onNew) {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(CardButtonStyle(tint: .white))
-                .help("\(title) にサブエージェントを作る")
-            }
-            if entries.isEmpty {
-                Text(emptyText)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.5))
-                    .padding(.leading, 10)
-            } else {
-                ForEach(entries) { entry in
-                    AgentRow(entry: entry, onEdit: { onEdit(entry.path, entry.directory) })
-                        .padding(.leading, 10)
-                }
-            }
-        }
-    }
-}
-
-private struct AgentRow: View {
-    let entry: AgentCatalog.Entry
-    let onEdit: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            switch entry.result {
+        VStack(alignment: .leading, spacing: 2) {
+            switch entry?.result {
             case .success(let definition):
                 HStack(spacing: 6) {
                     Text(definition.name)
@@ -131,8 +98,8 @@ private struct AgentRow: View {
                 Text(definition.description)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.65))
-                    .lineLimit(1)
-                if let shadowedBy = entry.shadowedBy {
+                    .lineLimit(2)
+                if let shadowedBy = entry?.shadowedBy {
                     Text("同じ名前の \(ProjectPath.abbreviate(shadowedBy)) が優先されます")
                         .font(.caption2)
                         .foregroundStyle(.gray)
@@ -141,18 +108,108 @@ private struct AgentRow: View {
                 }
             case .failure(let problem):
                 Label {
-                    Text("\(fileName): \(problem.message)（Claude Code は読み飛ばします）")
+                    Text("\(AgentTile.fileName(entry?.path ?? "")): \(problem.message)（Claude Code は読み飛ばします）")
                 } icon: {
                     Image(systemName: "exclamationmark.triangle")
                 }
                 .font(.caption)
                 .foregroundStyle(.orange)
-                .lineLimit(2)
+                .lineLimit(3)
+            case nil:
+                Text("キャラにマウスを乗せると詳細を表示します。押すと編集、「＋」で新しく作ります。")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.45))
             }
         }
+        .frame(maxWidth: .infinity, minHeight: 52, maxHeight: 52, alignment: .topLeading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func toolsText(_ definition: AgentDefinition) -> String {
+        guard let tools = definition.tools else { return "ツール: すべて" }
+        return "ツール: " + (tools.isEmpty ? "なし" : tools.joined(separator: ", "))
+    }
+}
+
+private struct AgentSection: View {
+    let title: String
+    let subtitle: String
+    let entries: [AgentCatalog.Entry]
+    let emptyText: String
+    @Binding var hovered: AgentCatalog.Entry?
+    let onEdit: (String, String) -> Void
+    let onNew: () -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 74, maximum: 90), spacing: 4, alignment: .top)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.45))
+                    .lineLimit(1)
+                    .truncationMode(.head)
+            }
+            if entries.isEmpty {
+                Text(emptyText)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 4) {
+                ForEach(entries) { entry in
+                    AgentTile(
+                        entry: entry,
+                        isHovered: hovered == entry,
+                        onHover: { inside in
+                            if inside {
+                                hovered = entry
+                            } else if hovered == entry {
+                                hovered = nil
+                            }
+                        },
+                        onEdit: { onEdit(entry.path, entry.directory) }
+                    )
+                }
+                NewAgentTile(title: title, action: onNew)
+            }
+        }
+    }
+}
+
+/// サブエージェント 1 体。普段は止めた絵で、マウスを乗せている間だけ待機中の動き（呼吸・まばたき）をする。
+private struct AgentTile: View {
+    let entry: AgentCatalog.Entry
+    let isHovered: Bool
+    let onHover: (Bool) -> Void
+    let onEdit: () -> Void
+
+    var body: some View {
+        VStack(spacing: 3) {
+            AgentCharacter(
+                palette: AgentAppearance.palette(for: entry),
+                mood: entry.definition == nil ? .error : .idle,
+                animated: isHovered
+            )
+            .frame(width: 56, height: 40)
+            Text(name)
+                .font(.caption2.weight(isHovered ? .semibold : .regular))
+                .foregroundStyle(entry.definition == nil ? .orange : .white.opacity(0.85))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.vertical, 5)
+        .padding(.horizontal, 3)
+        .frame(maxWidth: .infinity)
+        .background(.white.opacity(isHovered ? 0.1 : 0), in: RoundedRectangle(cornerRadius: 8))
         .opacity(entry.shadowedBy == nil ? 1 : 0.55)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .onHover(perform: onHover)
         // 読めない定義はフォームで直せないので、押しても開かない（Finder から直す）。
         .onTapGesture { if entry.definition != nil { onEdit() } }
         .contextMenu {
@@ -164,12 +221,84 @@ private struct AgentRow: View {
             }
         }
         .help(entry.path)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(entry.definition == nil ? "\(name)（読めない定義）" : name)
+        .accessibilityAddTraits(.isButton)
     }
 
-    private var fileName: String { (entry.path as NSString).lastPathComponent }
+    private var name: String {
+        entry.definition?.name ?? Self.fileName(entry.path)
+    }
 
-    private func toolsText(_ definition: AgentDefinition) -> String {
-        guard let tools = definition.tools else { return "ツール: すべて" }
-        return "ツール: " + tools.joined(separator: ", ")
+    static func fileName(_ path: String) -> String {
+        (path as NSString).lastPathComponent
+    }
+}
+
+/// 色を付けたキャラ。動かすときだけ `TimelineView` で描き直す（一覧は待機中に CPU を使わない）。
+private struct AgentCharacter: View {
+    let palette: CharacterPalette
+    let mood: CharacterMood
+    let animated: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if animated, !reduceMotion, let interval = CharacterAnimation.frameInterval(for: mood) {
+            TimelineView(.periodic(from: .now, by: interval)) { context in
+                canvas(pose: CharacterAnimation.pose(for: mood, at: context.date.timeIntervalSinceReferenceDate))
+            }
+        } else {
+            canvas(pose: CharacterAnimation.pose(for: mood, at: 0, reduceMotion: true))
+        }
+    }
+
+    private func canvas(pose: CharacterPose) -> some View {
+        CharacterCanvas(mood: mood, eyeOffset: .zero, pose: pose, palette: palette)
+    }
+}
+
+/// 新しく作る入口。キャラの輪郭を点線で描く。
+private struct NewAgentTile: View {
+    let title: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                ZStack {
+                    CharacterOutline()
+                        .stroke(.white.opacity(isHovered ? 0.7 : 0.4), style: StrokeStyle(lineWidth: 1.2, dash: [3, 3]))
+                    Image(systemName: "plus")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(isHovered ? 0.9 : 0.6))
+                        .offset(y: 3)
+                }
+                .frame(width: 56, height: 40)
+                Text("新規")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.vertical, 5)
+            .padding(.horizontal, 3)
+            .frame(maxWidth: .infinity)
+            .background(.white.opacity(isHovered ? 0.1 : 0), in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("\(title) にサブエージェントを作る")
+    }
+}
+
+/// キャラの体の輪郭を、枠に合わせて縮小したもの。
+private struct CharacterOutline: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width / CharacterSpec.viewBoxWidth, rect.height / CharacterSpec.viewBoxHeight)
+        let transform = CGAffineTransform(
+            translationX: rect.minX + (rect.width - CharacterSpec.viewBoxWidth * scale) / 2,
+            y: rect.minY + (rect.height - CharacterSpec.viewBoxHeight * scale) / 2
+        ).scaledBy(x: scale, y: scale)
+        return CharacterCanvas.bodyPath.applying(transform)
     }
 }

@@ -31,6 +31,17 @@ public enum PathSegment: Sendable, Equatable {
     case curve(to: CGPoint, control1: CGPoint, control2: CGPoint)
 }
 
+/// 体と底の陰の色（sRGB の 16 進）。目の色は共通。
+public struct CharacterPalette: Sendable, Equatable {
+    public var body: UInt32
+    public var shadow: UInt32
+
+    public init(body: UInt32, shadow: UInt32) {
+        self.body = body
+        self.shadow = shadow
+    }
+}
+
 /// `docs/design/character.md` の数値。単位は viewBox（140 × 100、y は下向き）。
 public enum CharacterSpec {
     public static let viewBoxWidth: CGFloat = 140
@@ -63,6 +74,8 @@ public enum CharacterSpec {
     public static let bodyColor: UInt32 = 0xFBFAF6
     public static let shadowColor: UInt32 = 0xE6E1D8
     public static let eyeColor: UInt32 = 0x2B2230
+    /// ノッチのキャラの色。白はノッチだけに使う（`AgentAppearance`）。
+    public static let notchPalette = CharacterPalette(body: bodyColor, shadow: shadowColor)
 
     public static let idleEyeRadius: CGFloat = 5
     public static let waitingEyeRadius: CGFloat = 7.5
