@@ -97,6 +97,8 @@ public struct Session: Sendable, Equatable, Identifiable {
     public var subagents: [Subagent]
     /// 新しいものが末尾。`SessionStore.maxRecentTools` 件まで。
     public var recentTools: [ToolActivity]
+    /// 成功した編集で変わったファイルと差分（最初に変わった順、ROADMAP 5-3）。サブエージェントの編集も含む。
+    public var fileChanges: [FileChange] = []
 
     /// 表示用の名前: タイトル、なければ作業フォルダ名。
     public var displayName: String {

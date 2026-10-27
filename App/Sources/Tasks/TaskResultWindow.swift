@@ -104,25 +104,21 @@ private struct TaskResultView: View {
                 .frame(minHeight: 120)
             }
 
-            GroupBox("変更したファイル（\(transcript.changedFiles.count)）") {
-                if transcript.changedFiles.isEmpty {
+            GroupBox(changesTitle(transcript)) {
+                if transcript.fileChanges.isEmpty {
                     Text("ありません。")
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 2) {
-                            ForEach(transcript.changedFiles, id: \.self) { path in
-                                Button(TaskResultSummary.relative(path, to: projectDirectory)) {
-                                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
-                                }
-                                .buttonStyle(.link)
-                                .help("Finder で表示: \(path)")
+                            ForEach(transcript.fileChanges) { change in
+                                FileChangeRow(change: change, projectDirectory: projectDirectory)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxHeight: 120)
+                    .frame(maxHeight: 220)
                 }
             }
 
@@ -224,5 +220,62 @@ enum TaskResultSummary {
             return ProjectPath.abbreviate(path)
         }
         return String(path.dropFirst(directory.count).drop { $0 == "/" })
+    }
+}
+
+private func changesTitle(_ transcript: TaskTranscript) -> String {
+    guard !transcript.fileChanges.isEmpty else { return "変更したファイル" }
+    let totals = FileChange.totals(transcript.fileChanges)
+    return "変更したファイル（\(transcript.fileChanges.count)、+\(totals.added) −\(totals.removed)）"
+}
+
+/// 変更したファイル 1 つ。「差分」を開くと、編集ごとの差分（前後 3 行）を出す（ROADMAP 5-3、F3-6）。
+private struct FileChangeRow: View {
+    let change: FileChange
+    let projectDirectory: String?
+    @State private var isExpanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(change.edits.enumerated()), id: \.offset) { _, edit in
+                    if edit.kind == .write {
+                        Text("ファイル全体を書き込み（前の内容は分からないので、すべて追加として数えます）")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(Array(edit.hunks.enumerated()), id: \.offset) { _, hunk in
+                        ScrollView(.horizontal) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(hunk.enumerated()), id: \.offset) { _, line in
+                                    DiffLineView(line: line)
+                                }
+                            }
+                            .padding(6)
+                        }
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    if edit.isTruncated {
+                        Text("長いので途中までです。").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        } label: {
+            HStack(spacing: 8) {
+                Button(TaskResultSummary.relative(change.path, to: projectDirectory)) {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: change.path)])
+                }
+                .buttonStyle(.link)
+                .help("Finder で表示: \(change.path)")
+                Text("+\(change.added)").foregroundStyle(.green)
+                Text("−\(change.removed)").foregroundStyle(.red)
+                if change.edits.count > 1 {
+                    Text("\(change.edits.count) 回").foregroundStyle(.secondary)
+                }
+            }
+            .font(.callout.monospacedDigit())
+        }
     }
 }

@@ -138,6 +138,11 @@ private struct SessionRow: View {
         if let project, project.name != session.displayName { parts.append(project.name) }
         if let model = session.model { parts.append(model) }
         if let terminal = session.terminal { parts.append(terminal) }
+        if !session.fileChanges.isEmpty {
+            // 編集したファイルの数と、追加・削除した行数（F3-6）。
+            let totals = FileChange.totals(session.fileChanges)
+            parts.append("\(session.fileChanges.count) ファイル +\(totals.added) −\(totals.removed)")
+        }
         parts.append(session.lastEventAt.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)))
         return parts.joined(separator: " · ")
     }
