@@ -97,7 +97,7 @@ private struct TaskResultView: View {
 
             GroupBox(task.isActive ? "最新の応答" : "最後の応答") {
                 ScrollView {
-                    Text(transcript.lastAssistantText ?? (task.isActive ? "まだ応答はありません。" : "応答はありませんでした。"))
+                    Text(transcript.lastAssistantText ?? task.restoredSummary ?? (task.isActive ? "まだ応答はありません。" : "応答はありませんでした。"))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -194,7 +194,7 @@ enum TaskResultSummary {
         if task.isActive, let tool = transcript.currentTool {
             return "▸ " + tool.name
         }
-        if !task.isActive, let text = transcript.lastAssistantText, let line = ToolSummary.oneLine(text) {
+        if !task.isActive, let text = transcript.lastAssistantText ?? task.restoredSummary, let line = ToolSummary.oneLine(text) {
             return line
         }
         return TaskCommand.displayName(for: task.prompt)

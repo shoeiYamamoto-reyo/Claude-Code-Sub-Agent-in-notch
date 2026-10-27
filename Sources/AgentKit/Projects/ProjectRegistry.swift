@@ -178,7 +178,7 @@ public enum ProjectRegistryFile {
         return decoder
     }
 
-    private static func describe(_ error: Error) -> String {
+    static func describe(_ error: Error) -> String {
         switch error {
         case DecodingError.keyNotFound(let key, let context):
             "\(keyPath(context.codingPath + [key])) がありません"

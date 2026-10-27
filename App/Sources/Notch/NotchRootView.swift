@@ -134,12 +134,19 @@ private struct IslandContent: View {
         case .agents:
             AgentListView(
                 overview: model.agentOverview,
+                history: model.taskHistory,
                 onRefresh: { model.onRefreshAgents?() },
                 onEdit: { model.onEditAgent?($0, $1) },
                 onNew: { model.onNewAgent?($0, $1) }
             )
             // 登録・編集・削除したプロジェクトの定義を出し直す。
             .onChange(of: model.projects) { model.onRefreshAgents?() }
+        case .history:
+            TaskHistoryListView(
+                history: model.taskHistory,
+                error: model.taskHistoryError,
+                onShow: { model.onShowHistoryEntry?($0) }
+            )
         }
     }
 
@@ -155,12 +162,14 @@ enum ExpandedTab: CaseIterable {
     case sessions
     case projects
     case agents
+    case history
 
     var title: String {
         switch self {
         case .sessions: "セッション"
         case .projects: "プロジェクト"
         case .agents: "エージェント"
+        case .history: "履歴"
         }
     }
 }

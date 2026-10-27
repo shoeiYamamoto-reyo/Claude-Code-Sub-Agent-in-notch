@@ -41,7 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var agentLibrary = AgentLibrary(model: model)
     lazy var agentEditor = AgentEditor(model: model)
     lazy var claudeSetup = ClaudeSetup(model: model)
-    lazy var taskRunner = TaskRunner(model: model, claude: claudeSetup)
+    lazy var taskHistory = TaskHistoryStore(model: model)
+    lazy var taskRunner = TaskRunner(model: model, claude: claudeSetup, history: taskHistory)
     lazy var taskLauncher = TaskLauncher(model: model, runner: taskRunner)
     lazy var taskResultViewer = TaskResultViewer(model: model)
     let quickInputHotKey = QuickInputHotKey()
@@ -56,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = agentLibrary
         _ = agentEditor
         claudeSetup.start()
+        taskHistory.load()
         _ = taskLauncher
         _ = taskResultViewer
         model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }

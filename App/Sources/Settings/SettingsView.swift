@@ -28,6 +28,7 @@ private struct GeneralSettings: View {
     let model: NotchModel
     let controller: NotchPanelController
     let loginItem: LoginItem
+    @State private var isConfirmingClear = false
 
     var body: some View {
         Form {
@@ -68,8 +69,29 @@ private struct GeneralSettings: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            Section {
+                LabeledContent("タスクの履歴") {
+                    HStack {
+                        Text("\(model.taskHistory.entries.count) 件（最大 \(TaskHistory.maxEntries) 件）")
+                            .foregroundStyle(.secondary)
+                        Button("消去…") { isConfirmingClear = true }
+                            .disabled(model.taskHistory.entries.isEmpty)
+                    }
+                }
+                if let error = model.taskHistoryError {
+                    Text(error).foregroundStyle(.red)
+                }
+            } footer: {
+                Text("アプリから始めたタスクの指示・結果の要約・変更したファイルの数を残します。出力そのものは 14 日で消えます。")
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+        .confirmationDialog("タスクの履歴をすべて消去しますか？", isPresented: $isConfirmingClear) {
+            Button("消去", role: .destructive) { model.onClearTaskHistory?() }
+        } message: {
+            Text("エージェントごとの利用回数も 0 に戻ります。元に戻せません。")
+        }
         .onAppear { loginItem.refresh() }
     }
 }

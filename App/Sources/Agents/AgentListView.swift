@@ -5,9 +5,10 @@ import SwiftUI
 /// 展開時の「エージェント」タブ（F1-3 / F5-1、`docs/design/agent-characters.md`）。
 /// サブエージェントをノッチと同じ形のキャラにして、ユーザー共通と登録プロジェクトごとに並べる。
 /// 体の色は frontmatter の `color`。マウスを乗せると上の欄に詳細を出し、押すと編集、最後の「＋」で新規作成
-/// （F5-2 / F5-3、`AgentEditor`）。
+/// （F5-2 / F5-3、`AgentEditor`）。詳細にはタスクの履歴から数えた利用回数も出す（F5-6、ROADMAP 5-4）。
 struct AgentListView: View {
     let overview: AgentOverview?
+    let history: TaskHistory
     let onRefresh: () -> Void
     /// 定義ファイルのパスと、それを読んだ `.claude/agents` フォルダ。
     let onEdit: (String, String) -> Void
@@ -15,7 +16,7 @@ struct AgentListView: View {
     let onNew: (String, String) -> Void
 
     /// マウスを乗せているキャラ。
-    @State private var hovered: AgentCatalog.Entry?
+    @State private var hovered: HoveredAgent?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -26,13 +27,14 @@ struct AgentListView: View {
                 Button("再読み込み", action: onRefresh)
                     .buttonStyle(CardButtonStyle(tint: .white))
             }
-            AgentDetail(entry: hovered)
+            AgentDetail(entry: hovered?.entry, usage: hovered.flatMap { usageText($0) })
             if let overview {
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         AgentSection(
                             title: "ユーザー共通",
                             subtitle: "~/.claude/agents",
+                            projectID: nil,
                             entries: overview.user,
                             emptyText: "定義はありません。",
                             hovered: $hovered,
@@ -45,6 +47,7 @@ struct AgentListView: View {
                             AgentSection(
                                 title: item.project.name,
                                 subtitle: ProjectPath.abbreviate(item.project.directory) + "/.claude/agents",
+                                projectID: item.project.id,
                                 entries: item.entries,
                                 emptyText: "このプロジェクトの定義はありません（ユーザー共通のものが使えます）。",
                                 hovered: $hovered,
@@ -70,11 +73,25 @@ struct AgentListView: View {
         }
         .onAppear(perform: onRefresh)
     }
+
+    /// ユーザー共通の定義はすべてのプロジェクトのタスクを、プロジェクトの定義はそのプロジェクトのタスクだけを数える。
+    private func usageText(_ hovered: HoveredAgent) -> String? {
+        guard let name = hovered.entry.definition?.name else { return nil }
+        return TaskHistoryText.usage(history.usage(agent: name, projectIDs: hovered.projectID.map { [$0] }))
+    }
+}
+
+/// マウスを乗せているキャラと、それを並べたプロジェクト（ユーザー共通なら nil）。
+private struct HoveredAgent: Equatable {
+    var entry: AgentCatalog.Entry
+    var projectID: Project.ID?
 }
 
 /// マウスを乗せているキャラの詳細。高さを固定して、乗せ替えても一覧が動かないようにする。
 private struct AgentDetail: View {
     let entry: AgentCatalog.Entry?
+    /// 「利用 3 回 · 成功 2/3」。アプリから使ったことが無ければ nil。
+    let usage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -89,6 +106,13 @@ private struct AgentDetail: View {
                             .font(.caption2.weight(.medium))
                             .padding(.horizontal, 5)
                             .background(.white.opacity(0.12), in: Capsule())
+                    }
+                    if let usage {
+                        Text(usage)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .lineLimit(1)
+                            .fixedSize()
                     }
                     Text(toolsText(definition))
                         .font(.caption2)
@@ -136,9 +160,10 @@ private struct AgentDetail: View {
 private struct AgentSection: View {
     let title: String
     let subtitle: String
+    let projectID: Project.ID?
     let entries: [AgentCatalog.Entry]
     let emptyText: String
-    @Binding var hovered: AgentCatalog.Entry?
+    @Binding var hovered: HoveredAgent?
     let onEdit: (String, String) -> Void
     let onNew: () -> Void
 
@@ -163,13 +188,14 @@ private struct AgentSection: View {
             }
             LazyVGrid(columns: columns, alignment: .leading, spacing: 4) {
                 ForEach(entries) { entry in
+                    let item = HoveredAgent(entry: entry, projectID: projectID)
                     AgentTile(
                         entry: entry,
-                        isHovered: hovered == entry,
+                        isHovered: hovered == item,
                         onHover: { inside in
                             if inside {
-                                hovered = entry
-                            } else if hovered == entry {
+                                hovered = item
+                            } else if hovered == item {
                                 hovered = nil
                             }
                         },

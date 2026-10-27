@@ -39,6 +39,8 @@ struct TaskRun: Identifiable, Equatable {
     let outputPath: String
     /// 出力を読みながらまとめた結果（M3-4）。
     var transcript = TaskTranscript()
+    /// 履歴から開き直したとき、出力ファイルが消えていれば履歴に残した最後の応答（ROADMAP 5-4）。
+    var restoredSummary: String?
 
     var isActive: Bool { state == .running || state == .stopping }
 
@@ -56,25 +58,32 @@ struct TaskRun: Identifiable, Equatable {
 ///   シグナルは子のプロセスグループに送る（Bash ツールから起動したものも残さない）。
 /// - アプリの終了時は動いているタスクに SIGTERM を送る（待たない）。
 /// - 出力ファイルは起動時に古いものを消す（`TaskOutputRetention`）。
+/// - 始めた・続けた・終わったときに履歴に残す（`TaskHistoryStore`、ROADMAP 5-4）。一覧から消えたタスクは、
+///   履歴から出力ファイルを読み直して一覧に戻せる（`showHistory`）。
 @MainActor
 final class TaskRunner {
     let model: NotchModel
     private let claude: ClaudeSetup
+    private let history: TaskHistoryStore
     private var processes: [UUID: Process] = [:]
     private var stopTimers: [UUID: Task<Void, Never>] = [:]
     private var stderrTails: [UUID: StderrTail] = [:]
+    /// 履歴から出力ファイルを読み直している最中のタスク。
+    private var restoring: Set<UUID> = []
 
     /// 一覧に残す終わったタスクの数。
     private static let keepFinished = 10
 
-    init(model: NotchModel, claude: ClaudeSetup) {
+    init(model: NotchModel, claude: ClaudeSetup, history: TaskHistoryStore) {
         self.model = model
         self.claude = claude
+        self.history = history
         model.onStopTask = { [weak self] id in self?.stop(id) }
         model.onContinueTask = { [weak self] id, prompt in
             guard let self else { return "続けられません。" }
             return self.continueTask(id, prompt: prompt)
         }
+        model.onShowHistoryEntry = { [weak self] id in self?.showHistory(id) }
         Self.removeOldOutputs()
     }
 
@@ -87,7 +96,7 @@ final class TaskRunner {
     /// タスクを始める。始められなければ理由を返す。
     func start(_ request: TaskRequest, project: Project) -> String? {
         if let problem = launch(request, project: project) { return problem }
-        model.tasks.insert(TaskRun(
+        let run = TaskRun(
             id: request.sessionID,
             projectID: project.id,
             projectName: project.name,
@@ -96,8 +105,10 @@ final class TaskRunner {
             startedAt: Date(),
             state: .running,
             outputPath: Self.outputURL(for: request.sessionID).path
-        ), at: 0)
+        )
+        model.tasks.insert(run, at: 0)
         trimFinished()
+        history.begin(run)
         return nil
     }
 
@@ -125,7 +136,9 @@ final class TaskRunner {
         continued.state = .running
         continued.endedAt = nil
         continued.transcript.beginFollowUp()
+        continued.restoredSummary = nil
         model.tasks.insert(continued, at: 0)
+        history.beginFollowUp(id, prompt: trimmed)
         return nil
     }
 
@@ -247,6 +260,44 @@ final class TaskRunner {
         return nil
     }
 
+    /// 履歴の行を押したとき。一覧にあればそのまま結果を開き、無ければ出力ファイルを読み直して一覧に戻してから開く
+    /// （続けられるようにするため）。出力ファイルは別スレッドで読む。
+    func showHistory(_ id: UUID) {
+        if model.tasks.contains(where: { $0.id == id }) {
+            model.onShowTask?(id)
+            return
+        }
+        guard let entry = model.taskHistory.entry(id: id), entry.outcome != .running, !restoring.contains(id) else { return }
+        restoring.insert(id)
+        let outputURL = Self.outputURL(for: id)
+        Task {
+            let transcript = await Task.detached(priority: .userInitiated) { Self.readTranscript(at: outputURL) }.value
+            restoring.remove(id)
+            guard !model.tasks.contains(where: { $0.id == id }) else {
+                model.onShowTask?(id)
+                return
+            }
+            var run = TaskRun(
+                id: entry.id,
+                projectID: entry.projectID,
+                projectName: entry.projectName,
+                agent: entry.agent,
+                prompt: entry.prompt,
+                followUps: entry.followUps,
+                startedAt: entry.startedAt,
+                endedAt: entry.endedAt,
+                state: Self.state(for: entry, transcript: transcript),
+                outputPath: outputURL.path,
+                transcript: transcript ?? TaskTranscript()
+            )
+            if transcript?.lastAssistantText == nil { run.restoredSummary = entry.summary }
+            // 動いているものの後ろ、始めた順の位置に入れる。
+            let index = model.tasks.firstIndex { !$0.isActive && $0.startedAt < run.startedAt } ?? model.tasks.endIndex
+            model.tasks.insert(run, at: index)
+            model.onShowTask?(id)
+        }
+    }
+
     func stop(_ id: UUID) {
         guard let process = processes[id], process.isRunning else { return }
         Self.send(SIGINT, to: process)
@@ -315,6 +366,33 @@ final class TaskRunner {
                 let fallback = signaled ? "シグナル \(status) で終了しました" : "終了コード \(status)"
                 run.state = .failed(detail.isEmpty ? fallback : String(detail.suffix(300)))
             }
+        }
+        if let run = model.tasks.first(where: { $0.id == id }) { history.finish(run) }
+    }
+
+    /// 出力ファイルを読み直す。無ければ nil。
+    nonisolated private static func readTranscript(at url: URL) -> TaskTranscript? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        var transcript = TaskTranscript()
+        for line in data.split(separator: 0x0A, omittingEmptySubsequences: true) {
+            transcript.consume(String(decoding: line, as: UTF8.self))
+        }
+        return transcript
+    }
+
+    private static func state(for entry: TaskHistoryEntry, transcript: TaskTranscript?) -> TaskRun.State {
+        switch entry.outcome {
+        case .running, .finished:
+            return .finished
+        case .error:
+            // 出力が残っていれば `result` からエラーと分かる。
+            return transcript?.result?.isError == true ? .finished : .failed(entry.detail ?? "エラー")
+        case .stopped:
+            return .stopped
+        case .failed:
+            return .failed(entry.detail ?? "エラー")
+        case .interrupted:
+            return .failed("アプリが終了したため、結果が分かりません")
         }
     }
 
