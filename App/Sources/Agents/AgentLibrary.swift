@@ -3,12 +3,14 @@ import Foundation
 
 /// ユーザーと登録プロジェクトのサブエージェント定義を読む（ROADMAP 3-2、F1-3）。
 ///
-/// 常時の監視はせず、「エージェント」タブを開いたときとプロジェクトが変わったときにだけ読み直す
-/// （待機中に CPU を使わないため。ファイル監視は M4-2）。読み込みはメインスレッドの外で行う。
+/// 「エージェント」タブを開いたとき、プロジェクトが変わったとき、定義のフォルダの中身が変わったとき
+/// （ROADMAP 4-2、`DirectoryWatcher`）に読み直す。見張るのは今あるエージェントのフォルダだけで、
+/// 最初にタブを開くまでは何も見張らない。読み込みはメインスレッドの外で行う。
 @MainActor
 final class AgentLibrary {
     let model: NotchModel
     private var loadTask: Task<Void, Never>?
+    private lazy var watcher = DirectoryWatcher { [weak self] in self?.refresh() }
 
     init(model: NotchModel) {
         self.model = model
@@ -19,17 +21,20 @@ final class AgentLibrary {
         let projects = model.projects.projects
         let home = NSHomeDirectory()
         loadTask?.cancel()
-        loadTask = Task { [model] in
-            let overview = await Task.detached(priority: .utility) {
-                AgentOverview(
+        loadTask = Task { [weak self, model] in
+            let (overview, watched) = await Task.detached(priority: .utility) {
+                let overview = AgentOverview(
                     user: AgentCatalog.load(projectDirectory: nil, home: home),
                     projects: projects.map { project in
                         (project, AgentCatalog.load(projectDirectory: project.directory, home: home))
                     }
                 )
+                let watched = AgentFileStore.watchedDirectories(projectDirectories: projects.map(\.directory), home: home)
+                return (overview, watched)
             }.value
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, let self else { return }
             model.agentOverview = overview
+            watcher.watch(watched)
         }
     }
 }
@@ -45,6 +50,11 @@ struct AgentOverview: Equatable {
 
     var user: [AgentCatalog.Entry]
     var projects: [ProjectAgents]
+
+    /// 読み込んだすべての定義（同じフォルダの name の重なりを調べるのに使う）。
+    var allEntries: [AgentCatalog.Entry] {
+        user + projects.flatMap(\.entries)
+    }
 
     init(user: AgentCatalog, projects: [(Project, AgentCatalog)]) {
         self.user = user.entries(in: .user)
