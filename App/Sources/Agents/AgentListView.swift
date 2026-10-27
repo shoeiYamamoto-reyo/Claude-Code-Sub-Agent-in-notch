@@ -182,7 +182,7 @@ private struct AgentSection: View {
     }
 }
 
-/// サブエージェント 1 体。普段は止めた絵で、マウスを乗せている間だけ待機中の動き（呼吸・まばたき）をする。
+/// サブエージェント 1 体。普段は止めた絵で、マウスを乗せている間だけ左右に揺れる。
 private struct AgentTile: View {
     let entry: AgentCatalog.Entry
     let isHovered: Bool
@@ -236,16 +236,18 @@ private struct AgentTile: View {
 }
 
 /// 色を付けたキャラ。動かすときだけ `TimelineView` で描き直す（一覧は待機中に CPU を使わない）。
-private struct AgentCharacter: View {
+/// 編集画面（`AgentEditorView`）の見出しでも使う。
+struct AgentCharacter: View {
     let palette: CharacterPalette
     let mood: CharacterMood
     let animated: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        if animated, !reduceMotion, let interval = CharacterAnimation.frameInterval(for: mood) {
-            TimelineView(.periodic(from: .now, by: interval)) { context in
-                canvas(pose: CharacterAnimation.pose(for: mood, at: context.date.timeIntervalSinceReferenceDate))
+        if animated, !reduceMotion, mood != .error {
+            // 待機中の体は動かない（まばたきだけ）ので、乗せたことが分かるよう「完了」の揺れを借りる。
+            TimelineView(.periodic(from: .now, by: CharacterAnimation.frameInterval)) { context in
+                canvas(pose: CharacterAnimation.pose(for: .done, at: context.date.timeIntervalSinceReferenceDate))
             }
         } else {
             canvas(pose: CharacterAnimation.pose(for: mood, at: 0, reduceMotion: true))

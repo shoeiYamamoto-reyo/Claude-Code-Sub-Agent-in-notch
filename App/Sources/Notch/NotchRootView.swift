@@ -8,7 +8,7 @@ struct NotchRootView: View {
     var body: some View {
         if let layout = model.layout {
             let state = model.presentation
-            let size = layout.islandSize(for: state)
+            let size = layout.islandSize(for: state, editing: model.agentEdit != nil)
             ZStack(alignment: .top) {
                 UnevenRoundedRectangle(
                     bottomLeadingRadius: cornerRadius(for: state),
@@ -76,46 +76,17 @@ private struct IslandContent: View {
                         .foregroundStyle(.orange)
                         .lineLimit(1)
                 }
-                // 承認カードが出ている間は場所を譲る（入力中は出したまま）。
-                if model.isQuickInputActive || (model.approvals.isEmpty && !model.projects.projects.isEmpty && model.projectLoadError == nil) {
-                    QuickTaskBar(model: model)
-                }
-                ExpandedTabBar(selection: $tab)
-                switch tab {
-                case .sessions:
-                    if !model.tasks.isEmpty {
-                        TaskRunListView(
-                            tasks: model.tasks,
-                            onStop: { model.onStopTask?($0) },
-                            onShow: { model.onShowTask?($0) }
-                        )
-                    }
-                    SessionListView(
-                        sessions: model.sessions,
-                        projects: model.projects,
-                        receiver: model.receiver,
-                        installStatus: model.hookInstallStatus,
-                        onInstallHooks: { model.onInstallHooks?() },
-                        onRegisterFolder: { model.onRegisterFolder?($0) }
+                if let session = model.agentEdit {
+                    // 定義の編集はノッチの中で完結させる（ROADMAP 4-4）。承認カードは上に出したまま、編集内容は残す。
+                    AgentEditorView(
+                        session: session,
+                        plan: { model.onPlanAgentSave?($0) },
+                        onSave: { model.onSaveAgent?($0) },
+                        onClose: { model.onCloseAgentEdit?() }
                     )
-                case .projects:
-                    ProjectListView(
-                        registry: model.projects,
-                        sessions: model.sessions,
-                        loadError: model.projectLoadError,
-                        onAdd: { model.onAddProject?() },
-                        onEdit: { model.onEditProject?($0) },
-                        onStartTask: { model.onStartTask?($0) }
-                    )
-                case .agents:
-                    AgentListView(
-                        overview: model.agentOverview,
-                        onRefresh: { model.onRefreshAgents?() },
-                        onEdit: { model.onEditAgent?($0, $1) },
-                        onNew: { model.onNewAgent?($0, $1) }
-                    )
-                    // 登録・編集・削除したプロジェクトの定義を出し直す。
-                    .onChange(of: model.projects) { model.onRefreshAgents?() }
+                    .id(session.id)
+                } else {
+                    tabs
                 }
             }
         }
@@ -124,6 +95,52 @@ private struct IslandContent: View {
         .padding(.top, barHeight + (state == .expanded ? 14 : 6))
         .padding(.bottom, 12)
         .transition(.opacity)
+    }
+
+    /// 入力欄とタブ（定義を編集していないとき）。
+    @ViewBuilder
+    private var tabs: some View {
+        // 承認カードが出ている間は場所を譲る（入力中は出したまま）。
+        if model.isQuickInputActive || (model.approvals.isEmpty && !model.projects.projects.isEmpty && model.projectLoadError == nil) {
+            QuickTaskBar(model: model)
+        }
+        ExpandedTabBar(selection: $tab)
+        switch tab {
+        case .sessions:
+            if !model.tasks.isEmpty {
+                TaskRunListView(
+                    tasks: model.tasks,
+                    onStop: { model.onStopTask?($0) },
+                    onShow: { model.onShowTask?($0) }
+                )
+            }
+            SessionListView(
+                sessions: model.sessions,
+                projects: model.projects,
+                receiver: model.receiver,
+                installStatus: model.hookInstallStatus,
+                onInstallHooks: { model.onInstallHooks?() },
+                onRegisterFolder: { model.onRegisterFolder?($0) }
+            )
+        case .projects:
+            ProjectListView(
+                registry: model.projects,
+                sessions: model.sessions,
+                loadError: model.projectLoadError,
+                onAdd: { model.onAddProject?() },
+                onEdit: { model.onEditProject?($0) },
+                onStartTask: { model.onStartTask?($0) }
+            )
+        case .agents:
+            AgentListView(
+                overview: model.agentOverview,
+                onRefresh: { model.onRefreshAgents?() },
+                onEdit: { model.onEditAgent?($0, $1) },
+                onNew: { model.onNewAgent?($0, $1) }
+            )
+            // 登録・編集・削除したプロジェクトの定義を出し直す。
+            .onChange(of: model.projects) { model.onRefreshAgents?() }
+        }
     }
 
     private func sessionName(for request: ApprovalRequest) -> String {

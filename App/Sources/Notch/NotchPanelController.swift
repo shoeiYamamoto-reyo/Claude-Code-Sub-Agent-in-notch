@@ -28,8 +28,8 @@ final class NotchPanelController {
     private var lastPointerUpdate = ContinuousClock.now - .seconds(1)
     /// この時刻までは peek の `notice` を鳴らさない（`playAlert` で代わりの音を鳴らした直後）。
     private var noticeSoundSuppressedUntil: Date?
-    /// クイック入力の前に前面にあったアプリ。入力を終えたらキー入力を返す。
-    private var appBeforeQuickInput: NSRunningApplication?
+    /// クイック入力・定義の編集の前に前面にあったアプリ。終えたらキー入力を返す。
+    private var appBeforeKeyInput: NSRunningApplication?
 
     init(model: NotchModel) {
         self.model = model
@@ -73,12 +73,32 @@ final class NotchPanelController {
             MainActor.assumeIsolated { self?.relayout() }
         })
         // ほかのアプリやウインドウを押してパネルがキーでなくなったら、入力を終える（縮むのはマウスが離れてから）。
+        // 定義の編集は内容を残したまま留めるのだけをやめ、編集欄を押してキーに戻ったらまた留める。
         observers.append(NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification,
             object: panel,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.endQuickInput(collapse: false) }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.endQuickInput(collapse: false)
+                if self.model.agentEdit != nil {
+                    self.appBeforeKeyInput = nil
+                    self.machine.unpin(at: .now)
+                    self.applyMachine()
+                }
+            }
+        })
+        observers.append(NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.model.agentEdit != nil else { return }
+                self.machine.pin()
+                self.applyMachine()
+            }
         })
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
@@ -124,12 +144,40 @@ final class NotchPanelController {
 
     /// ノッチを展開したまま留め、パネルでキー入力を受ける（入力欄を押したとき・ショートカット）。
     func beginQuickInput() {
-        guard model.layout != nil else { return }
-        if !model.isQuickInputActive {
-            let front = NSWorkspace.shared.frontmostApplication
-            appBeforeQuickInput = front?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : front
-        }
+        // 定義を編集している間は、編集画面を出したままにする。
+        guard model.layout != nil, model.agentEdit == nil else { return }
         model.isQuickInputActive = true
+        beginKeyInput()
+    }
+
+    /// 入力を終える。`collapse` ならすぐ縮める（Esc・開始したあと）。
+    func endQuickInput(collapse: Bool) {
+        guard model.isQuickInputActive else { return }
+        model.isQuickInputActive = false
+        endKeyInput(collapse: collapse)
+    }
+
+    // MARK: - 定義の編集（ROADMAP 4-4）
+
+    /// 編集画面を出したノッチを広げて留め、キー入力を受ける（`AgentEditor.onBegin`）。
+    func beginAgentEditing() {
+        guard model.layout != nil else { return }
+        model.isQuickInputActive = false
+        beginKeyInput()
+    }
+
+    /// 一覧に戻った（保存・戻る）。マウスが離れたら縮む（`AgentEditor.onEnd`）。
+    func endAgentEditing() {
+        endKeyInput(collapse: false)
+    }
+
+    // MARK: - キー入力
+
+    private func beginKeyInput() {
+        if !panel.acceptsKeyInput {
+            let front = NSWorkspace.shared.frontmostApplication
+            appBeforeKeyInput = front?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : front
+        }
         panel.acceptsKeyInput = true
         machine.pin()
         applyMachine()
@@ -137,10 +185,7 @@ final class NotchPanelController {
         panel.makeKeyAndOrderFront(nil)
     }
 
-    /// 入力を終える。`collapse` ならすぐ縮める（Esc・開始したあと）。
-    func endQuickInput(collapse: Bool) {
-        guard model.isQuickInputActive else { return }
-        model.isQuickInputActive = false
+    private func endKeyInput(collapse: Bool) {
         panel.acceptsKeyInput = false
         if collapse {
             machine.collapse()
@@ -149,9 +194,9 @@ final class NotchPanelController {
         }
         if panel.isKeyWindow {
             panel.resignKey()
-            appBeforeQuickInput?.activate()
+            appBeforeKeyInput?.activate()
         }
-        appBeforeQuickInput = nil
+        appBeforeKeyInput = nil
         processPointer()
     }
 
@@ -195,7 +240,7 @@ final class NotchPanelController {
         guard let layout = model.layout else { return }
         let location = NSEvent.mouseLocation
 
-        if layout.hoverFrame(for: machine.state).contains(location) {
+        if layout.hoverFrame(for: machine.state, editing: model.agentEdit != nil).contains(location) {
             machine.mouseEntered(at: .now)
         } else {
             machine.mouseExited(at: .now)
@@ -227,7 +272,7 @@ final class NotchPanelController {
             model.presentation = machine.state
         }
         if let layout = model.layout {
-            let hovering = layout.hoverFrame(for: machine.state).contains(NSEvent.mouseLocation)
+            let hovering = layout.hoverFrame(for: machine.state, editing: model.agentEdit != nil).contains(NSEvent.mouseLocation)
             panel.ignoresMouseEvents = !hovering
         }
 
