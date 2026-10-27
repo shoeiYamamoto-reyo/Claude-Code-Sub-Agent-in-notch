@@ -1,32 +1,13 @@
 import AgentKit
 import SwiftUI
 
-/// メニューバーの「サウンド」メニュー。設定画面ができるまでの置き場所（M5 で設定画面に移す）。
+/// メニューバーのおやすみモード（F0-8）。すぐ切り替えたいのでメニューに残し、ほかの音の設定は設定画面（`SettingsView`）に移した。
 struct SoundMenu: View {
     let sound: SoundPlayer
 
     var body: some View {
-        let settings = sound.settings
-        Menu("サウンド") {
-            Toggle("音を鳴らす", isOn: binding(\.isEnabled))
-            Picker("音量", selection: binding(\.volume)) {
-                ForEach(SoundSettings.Volume.allCases, id: \.self) { volume in
-                    Text(volume.displayName).tag(volume)
-                }
-            }
-            .disabled(!settings.isEnabled)
-            Toggle("ノッチの開閉の音", isOn: binding(\.playsInterfaceSounds))
-                .disabled(!settings.isEnabled)
-            Toggle("お知らせの音", isOn: binding(\.playsAlertSounds))
-                .disabled(!settings.isEnabled)
-            Divider()
-            quietMenu(settings)
-            Menu("音を試す") {
-                ForEach(SoundCue.allCases, id: \.self) { cue in
-                    Button(cue.displayName) { sound.preview(cue) }
-                }
-            }
-        }
+        // 音を止めていても、おやすみモードを終えられるように無効にはしない。
+        quietMenu(sound.settings)
     }
 
     @ViewBuilder
@@ -46,12 +27,5 @@ struct SoundMenu: View {
                 }
             }
         }
-    }
-
-    private func binding<Value>(_ keyPath: WritableKeyPath<SoundSettings, Value>) -> Binding<Value> {
-        Binding(
-            get: { sound.settings[keyPath: keyPath] },
-            set: { value in sound.update { $0[keyPath: keyPath] = value } }
-        )
     }
 }
