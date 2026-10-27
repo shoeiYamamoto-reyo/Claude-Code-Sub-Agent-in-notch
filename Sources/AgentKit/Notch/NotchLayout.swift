@@ -24,6 +24,8 @@ public struct NotchLayout: Sendable, Equatable {
     public static let peekExtraHeight: CGFloat = 34
     public static let peekMinimumWidth: CGFloat = 320
     public static let expandedMinimumSize = CGSize(width: 560, height: 380)
+    /// サブエージェントの定義をノッチの中で編集している間の大きさ（ROADMAP 4-4）。本文を書く欄を取るため広げる。
+    public static let editingMinimumSize = CGSize(width: 640, height: 600)
     /// パネルを島より大きく取る余白（アニメーションの行き過ぎで切れないように）。
     public static let panelMargin: CGFloat = 24
 
@@ -40,7 +42,8 @@ public struct NotchLayout: Sendable, Equatable {
 
     public var wingWidth: CGFloat { characterSize.width + Self.wingPadding * 2 }
 
-    public func islandSize(for state: NotchPresentationState) -> CGSize {
+    /// - Parameter editing: 定義を編集している（展開したときだけ `editingMinimumSize` まで広げる）。
+    public func islandSize(for state: NotchPresentationState, editing: Bool = false) -> CGSize {
         let collapsedWidth = geometry.hasNotch
             ? geometry.notchRect.width + wingWidth * 2
             : wingWidth
@@ -53,16 +56,17 @@ public struct NotchLayout: Sendable, Equatable {
                 height: barHeight + Self.peekExtraHeight
             )
         case .expanded:
+            let minimum = editing ? Self.editingMinimumSize : Self.expandedMinimumSize
             return CGSize(
-                width: max(collapsedWidth + 32, Self.expandedMinimumSize.width),
-                height: max(barHeight + 120, Self.expandedMinimumSize.height)
+                width: max(collapsedWidth + 32, minimum.width),
+                height: max(barHeight + 120, minimum.height)
             )
         }
     }
 
     /// パネル（NSPanel）の大きさ。どの状態の島も入るように固定する。
     public var panelSize: CGSize {
-        let sizes = NotchPresentationState.allCases.map(islandSize(for:))
+        let sizes = NotchPresentationState.allCases.map { islandSize(for: $0) } + [islandSize(for: .expanded, editing: true)]
         let width = sizes.map(\.width).max() ?? 0
         let height = sizes.map(\.height).max() ?? 0
         return CGSize(width: width + Self.panelMargin * 2, height: height + Self.panelMargin)
@@ -80,8 +84,8 @@ public struct NotchLayout: Sendable, Equatable {
     }
 
     /// 島の矩形（グローバル座標）。
-    public func islandFrame(for state: NotchPresentationState) -> CGRect {
-        let size = islandSize(for: state)
+    public func islandFrame(for state: NotchPresentationState, editing: Bool = false) -> CGRect {
+        let size = islandSize(for: state, editing: editing)
         return CGRect(
             x: geometry.notchRect.midX - size.width / 2,
             y: geometry.screenFrame.maxY - size.height,
@@ -92,8 +96,8 @@ public struct NotchLayout: Sendable, Equatable {
 
     /// この矩形にマウスがある間はクリックを受け、展開する（グローバル座標）。
     /// ノッチの無い画面では、メニューバー直下のクリックを奪わないよう余白を付けない。
-    public func hoverFrame(for state: NotchPresentationState) -> CGRect {
-        let island = islandFrame(for: state)
+    public func hoverFrame(for state: NotchPresentationState, editing: Bool = false) -> CGRect {
+        let island = islandFrame(for: state, editing: editing)
         guard geometry.hasNotch else { return island }
         let margin = Self.hoverMargin
         // 上は画面の外なので、左右と下だけ広げる。

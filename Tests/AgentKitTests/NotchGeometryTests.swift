@@ -118,6 +118,19 @@ final class NotchLayoutTests: XCTestCase {
         XCTAssertEqual(layout.panelFrame.midX, notchedGeometry.notchRect.midX)
     }
 
+    /// ROADMAP 4-4: 定義の編集中は展開したときだけ広がり、パネルに収まる。
+    func testEditingGrowsOnlyWhenExpanded() {
+        let layout = NotchLayout(geometry: notchedGeometry)
+        let editing = layout.islandSize(for: .expanded, editing: true)
+        XCTAssertGreaterThanOrEqual(editing.width, NotchLayout.editingMinimumSize.width)
+        XCTAssertGreaterThanOrEqual(editing.height, NotchLayout.editingMinimumSize.height)
+        XCTAssertGreaterThan(editing.height, layout.islandSize(for: .expanded).height)
+        XCTAssertEqual(layout.islandSize(for: .character, editing: true), layout.islandSize(for: .character))
+        XCTAssertEqual(layout.islandSize(for: .peek, editing: true), layout.islandSize(for: .peek))
+        XCTAssertTrue(layout.panelFrame.contains(layout.islandFrame(for: .expanded, editing: true)))
+        XCTAssertTrue(layout.hoverFrame(for: .expanded, editing: true).contains(layout.islandFrame(for: .expanded, editing: true)))
+    }
+
     func testHoverFrameAddsMarginOnlyWithNotch() {
         let notched = NotchLayout(geometry: notchedGeometry)
         let island = notched.islandFrame(for: .character)

@@ -51,6 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }
         model.onBeginQuickInput = { [weak self] in self?.controller.beginQuickInput() }
         model.onEndQuickInput = { [weak self] in self?.controller.endQuickInput(collapse: true) }
+        agentEditor.onBegin = { [weak self] in self?.controller.beginAgentEditing() }
+        agentEditor.onEnd = { [weak self] in self?.controller.endAgentEditing() }
         quickInputHotKey.onPress = { [weak self] in
             guard let self else { return }
             // プロジェクトが無ければ、先に登録してもらう。

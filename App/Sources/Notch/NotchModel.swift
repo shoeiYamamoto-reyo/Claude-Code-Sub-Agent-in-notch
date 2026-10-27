@@ -54,8 +54,17 @@ final class NotchModel {
     @ObservationIgnored var onRefreshAgents: (() -> Void)?
     /// 定義を編集する（ファイルのパス、そのファイルを読んだ `.claude/agents` フォルダ）。`AgentEditor` が受ける。
     @ObservationIgnored var onEditAgent: ((String, String) -> Void)?
-    /// 定義を新しく作る（置く `.claude/agents` フォルダ、ウインドウに出す置き場所の名前）。
+    /// 定義を新しく作る（置く `.claude/agents` フォルダ、画面に出す置き場所の名前）。
     @ObservationIgnored var onNewAgent: ((String, String) -> Void)?
+    /// ノッチの中で編集している定義（ROADMAP 4-4）。この間は一覧の代わりに編集画面を出し、ノッチを広げる。
+    /// 変更は `AgentEditor` だけが行う。
+    var agentEdit: AgentEditSession?
+    /// 編集画面の「保存の計画」（`AgentFileStore.plan`）。
+    @ObservationIgnored var onPlanAgentSave: ((AgentDefinition) -> AgentSavePlan?)?
+    /// 「保存」。書き込めなければ理由を返す。
+    @ObservationIgnored var onSaveAgent: ((SettingsFileEdit) -> String?)?
+    /// 「戻る」・Esc（保存せずに一覧へ戻る）。
+    @ObservationIgnored var onCloseAgentEdit: (() -> Void)?
 
     // MARK: - タスク（ROADMAP 3-3）
 
