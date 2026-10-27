@@ -116,7 +116,7 @@ private struct AgentDetail: View {
                 .foregroundStyle(.orange)
                 .lineLimit(3)
             case nil:
-                Text("キャラにマウスを乗せると詳細を表示します。押すと編集、「＋」で新しく作ります。")
+                Text("キャラにマウスを乗せると詳細を表示します。押すと編集、「新規」で新しく作ります。")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.45))
             }
