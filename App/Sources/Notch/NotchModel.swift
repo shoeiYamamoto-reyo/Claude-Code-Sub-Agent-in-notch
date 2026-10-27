@@ -83,6 +83,17 @@ final class NotchModel {
     /// 終わったタスクに追加の指示を渡して続ける。続けられなければ理由を返す（`TaskRunner.continueTask`、ROADMAP 3-6）。
     @ObservationIgnored var onContinueTask: ((_ id: UUID, _ prompt: String) -> String?)?
 
+    // MARK: - 履歴（ROADMAP 5-4）
+
+    /// アプリから始めたタスクの記録（新しく動いた順）。変更は `TaskHistoryStore` だけが行う。
+    var taskHistory = TaskHistory()
+    /// 履歴のファイルを読めなかった・書けなかったときの説明。
+    var taskHistoryError: String?
+    /// 履歴の行を押したとき（`TaskRunner.showHistory`）。一覧に無いタスクは出力ファイルから読み直して結果を開く。
+    @ObservationIgnored var onShowHistoryEntry: ((UUID) -> Void)?
+    /// 設定画面の「履歴を消去」（`TaskHistoryStore.clear`）。
+    @ObservationIgnored var onClearTaskHistory: (() -> Void)?
+
     // MARK: - クイック入力（ROADMAP 3-5）
 
     /// ノッチで指示を入力しているか。この間はパネルがキー入力を受け、マウスが離れても縮まない。

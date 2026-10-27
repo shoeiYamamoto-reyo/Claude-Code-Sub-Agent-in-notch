@@ -128,6 +128,11 @@ public enum ClaudeLocator {                      // 設定値 → ログイン�
 
 // M3-4 で実装。stream-json の 1 行 → StreamJSONEvent、流し込んで TaskTranscript
 // （最後の応答・成功した編集で変わったファイル・result）。LineBuffer で読み取りのチャンクを行に分ける。
+
+// M5-4 で実装。TaskHistory（新しく動いた順、最大 200 件）に TaskHistoryEntry（いつ・どのエージェントに・
+// 何を頼み・どうなったか、要約、コスト、変更行数）を begin / beginFollowUp / finish で記録する。
+// 保存は TaskHistoryFile（~/Library/Application Support/NotchAgent/history.json、0600、{"version": 1, "entries": [...]}）。
+// 読み込み時に running のままのものは interrupted にする。usage(agent:projectIDs:) で定義ごとの利用回数（F5-6）。
 public struct TaskTranscript: Sendable, Equatable {
     public mutating func consume(_ line: some StringProtocol)
     public var lastAssistantText: String? { get }   // メインの会話だけ（サブエージェントの応答は含めない）
