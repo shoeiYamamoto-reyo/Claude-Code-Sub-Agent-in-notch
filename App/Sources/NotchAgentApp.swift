@@ -19,6 +19,15 @@ struct NotchAgentApp: App {
                 claudeSetup: appDelegate.claudeSetup
             )
         }
+        Settings {
+            SettingsView(
+                model: appDelegate.model,
+                controller: appDelegate.controller,
+                loginItem: appDelegate.loginItem,
+                hookSetup: appDelegate.hookSetup,
+                claudeSetup: appDelegate.claudeSetup
+            )
+        }
     }
 }
 
@@ -36,6 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var taskLauncher = TaskLauncher(model: model, runner: taskRunner)
     lazy var taskResultViewer = TaskResultViewer(model: model)
     let quickInputHotKey = QuickInputHotKey()
+    let loginItem = LoginItem()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
@@ -81,11 +91,20 @@ private struct MenuContent: View {
     let projectCenter: ProjectCenter
     let taskLauncher: TaskLauncher
     let claudeSetup: ClaudeSetup
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Text("Notch Agent（開発中）")
         Text(receiverText)
             .foregroundStyle(.secondary)
+        Divider()
+        Button("設定…") {
+            // メニューバー常駐のアプリなので、前に出してから開く。
+            NSApp.activate()
+            openSettings()
+        }
+        .keyboardShortcut(",")
+        SoundMenu(sound: controller.sound)
         Divider()
         Text(installText)
         Button(model.hookInstallStatus == .installed ? "hooks を再インストール…" : "hooks をインストール…") {
@@ -145,14 +164,6 @@ private struct MenuContent: View {
         }
         Button(checked("お知らせ（peek）を試す", model.noticeText != nil)) {
             controller.setNotice(model.noticeText == nil ? "承認待ちのお知らせの例です（確認用）" : nil)
-        }
-        SoundMenu(sound: controller.sound)
-        Menu("表示する画面") {
-            ForEach(DisplayChoice.allCases, id: \.self) { choice in
-                Button(checked(choice.displayName, model.displayChoice == choice)) {
-                    controller.setDisplayChoice(choice)
-                }
-            }
         }
         Divider()
         Button("終了") {
