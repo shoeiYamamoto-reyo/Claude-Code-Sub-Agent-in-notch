@@ -29,6 +29,31 @@ public struct AgentDefinition: Sendable, Equatable {
     public var body: String
     public var frontmatter: Frontmatter
 
+    /// - Parameter frontmatter: 編集のときは読み込んだもの（未知の項目・順序・コメントを残すため）。新しく作るときは空。
+    public init(
+        name: String,
+        description: String,
+        tools: [String]? = nil,
+        disallowedTools: [String]? = nil,
+        model: String? = nil,
+        effort: String? = nil,
+        permissionMode: String? = nil,
+        color: String? = nil,
+        body: String,
+        frontmatter: Frontmatter = Frontmatter()
+    ) {
+        self.name = name
+        self.description = description
+        self.tools = tools
+        self.disallowedTools = disallowedTools
+        self.model = model
+        self.effort = effort
+        self.permissionMode = permissionMode
+        self.color = color
+        self.body = body
+        self.frontmatter = frontmatter
+    }
+
     /// Claude Code が読み飛ばす定義の理由（docs/claude-code-spec.md 7 章）。
     public enum Problem: Error, Sendable, Equatable {
         case frontmatter(Frontmatter.ParseError)
@@ -77,6 +102,133 @@ public struct AgentDefinition: Sendable, Equatable {
             body: parsed.body,
             frontmatter: frontmatter
         ))
+    }
+
+    // MARK: - 書き出し（ROADMAP 4-1）
+
+    /// ファイルの内容に戻す。`frontmatter` を土台に、値が変わった項目だけを書き直す。
+    /// 未知の項目・順序・コメント・区切りの行・本文はそのまま残り、何も変えなければ読んだときと同じテキストになる
+    /// （改行は LF、BOM なし）。
+    public func render() -> String {
+        var frontmatter = self.frontmatter
+        let name = name.trimmingCharacters(in: .whitespaces)
+        if Self.scalar(frontmatter["name"]) != Self.nonEmpty(name) {
+            frontmatter.set("name", .string(name))
+        }
+        let description = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if frontmatter["description"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) != description {
+            frontmatter.set("description", .string(description))
+        }
+        Self.setToolList("tools", tools, in: &frontmatter)
+        Self.setToolList("disallowedTools", disallowedTools, in: &frontmatter)
+        for (key, value) in [("model", model), ("effort", effort), ("permissionMode", permissionMode), ("color", color)] {
+            let value = value.flatMap { Self.nonEmpty($0.trimmingCharacters(in: .whitespaces)) }
+            if Self.scalar(frontmatter[key]) != value {
+                frontmatter.set(key, value.map { .string($0) })
+            }
+        }
+        let afterClosing = frontmatter.endsAtClosingLine && body.isEmpty ? "" : "\n"
+        return frontmatter.openingLine + "\n" + frontmatter.render() + frontmatter.closingLine + afterClosing + body
+    }
+
+    /// ツールの一覧を書く。前と同じなら書き方を変えない。新しく書くときは、元がリストならリスト、
+    /// そうでなければカンマ区切り（名前にカンマを含むとき・空のときはリスト）。
+    /// nil（項目なし: 親のツールを引き継ぐ）と空の一覧（`[]`）は区別する。
+    private static func setToolList(_ key: String, _ tools: [String]?, in frontmatter: inout Frontmatter) {
+        let normalized = tools?.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard toolList(frontmatter[key]) != normalized else { return }
+        guard let normalized else {
+            frontmatter.set(key, nil)
+            return
+        }
+        if case .list = frontmatter[key] {
+            frontmatter.set(key, .list(normalized))
+        } else if normalized.isEmpty || normalized.contains(where: { $0.contains(",") }) {
+            frontmatter.set(key, .list(normalized))
+        } else {
+            frontmatter.set(key, .string(normalized.joined(separator: ", ")))
+        }
+    }
+
+    private static func nonEmpty(_ text: String) -> String? {
+        text.isEmpty ? nil : text
+    }
+
+    /// 新しく作るときのファイル名（`<name>.md`）。パスに使えない文字と空白は `-` にする。
+    public var suggestedFileName: String {
+        let base = name.trimmingCharacters(in: .whitespaces)
+            .map { $0 == "/" || $0 == ":" || $0 == "\\" || $0.isWhitespace ? "-" : String($0) }
+            .joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: ".-"))
+        return (base.isEmpty ? "agent" : base) + ".md"
+    }
+
+    // MARK: - 検証（ROADMAP 4-1、F5-4）
+
+    public struct Issue: Sendable, Equatable {
+        public enum Severity: Sendable, Equatable {
+            /// Claude Code が読み飛ばす、または動きが決まらない。保存させない。
+            case error
+            /// 読めるが、意図どおりに動かないかもしれない。
+            case warning
+        }
+
+        /// frontmatter のキー（本文なら "body"）。
+        public var field: String
+        public var severity: Severity
+        public var message: String
+    }
+
+    public static let modelValues = ProjectEnvironment.modelSuggestions + ["inherit"]
+    public static let permissionModeValues = ["default"] + ProjectEnvironment.permissionModes
+    public static let colorValues = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"]
+
+    /// 保存する前の検査。
+    /// - Parameter namesInSameDirectory: 同じフォルダにあるほかの定義の `name`（重なるとどちらが使われるか決まらない）。
+    public func validate(namesInSameDirectory: [String] = []) -> [Issue] {
+        var issues: [Issue] = []
+        func add(_ field: String, _ severity: Issue.Severity, _ message: String) {
+            issues.append(Issue(field: field, severity: severity, message: message))
+        }
+        let name = name.trimmingCharacters(in: .whitespaces)
+        if name.isEmpty {
+            add("name", .error, "name を入力してください")
+        } else if !Self.isValidName(name) {
+            add("name", .error, Problem.invalidName(name).message)
+        } else if namesInSameDirectory.contains(name) {
+            add("name", .error, "同じフォルダに name「\(name)」の定義がほかにもあります（どちらが使われるか決まりません）")
+        }
+        if description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            add("description", .error, "description を入力してください（いつ使うかを Claude が判断する手がかりです）")
+        }
+        if let model = model?.trimmingCharacters(in: .whitespaces), !model.isEmpty,
+           !Self.modelValues.contains(model), !model.hasPrefix("claude-") {
+            add("model", .warning, "model「\(model)」は知らない値です（\(Self.modelValues.joined(separator: " / ")) かモデル ID）")
+        }
+        if let effort = effort?.trimmingCharacters(in: .whitespaces), !effort.isEmpty,
+           !ProjectEnvironment.effortLevels.contains(effort) {
+            add("effort", .warning, "effort「\(effort)」は知らない値です（\(ProjectEnvironment.effortLevels.joined(separator: " / "))）")
+        }
+        if let mode = permissionMode?.trimmingCharacters(in: .whitespaces), !mode.isEmpty,
+           !Self.permissionModeValues.contains(mode) {
+            add("permissionMode", .warning, "permissionMode「\(mode)」は知らない値です")
+        }
+        if let color = color?.trimmingCharacters(in: .whitespaces), !color.isEmpty, !Self.colorValues.contains(color) {
+            add("color", .warning, "color「\(color)」は知らない値です（\(Self.colorValues.joined(separator: " / "))）")
+        }
+        let tools = Set(tools ?? [])
+        let both = (disallowedTools ?? []).filter { tools.contains($0) }
+        if !both.isEmpty {
+            add("disallowedTools", .warning, "\(both.joined(separator: ", ")) は tools と disallowedTools の両方にあります")
+        }
+        if body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            add("body", .warning, "本文（system prompt）が空です")
+        }
+        // 書き出したものを Claude Code と同じ条件で読めるか。
+        if issues.allSatisfy({ $0.severity != .error }), case .failure(let problem) = Self.parse(render()) {
+            add("frontmatter", .error, "書き出した内容を読み戻せません: \(problem.message)")
+        }
+        return issues
     }
 
     public static func isValidName(_ name: String) -> Bool {
