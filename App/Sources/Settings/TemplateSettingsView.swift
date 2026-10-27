@@ -71,9 +71,14 @@ struct TemplateSettingsView: View {
             isPresented: $isConfirmingDelete
         ) {
             Button("削除", role: .destructive) {
-                if let selection { model.onDeleteTemplate?(selection) }
-                selection = nil
-                startNew()
+                guard let selection else { return }
+                let failures = model.onDeleteTemplate?(selection) ?? ["削除できません。"]
+                if failures.isEmpty {
+                    self.selection = nil
+                    startNew()
+                } else {
+                    problems = failures
+                }
             }
         }
     }

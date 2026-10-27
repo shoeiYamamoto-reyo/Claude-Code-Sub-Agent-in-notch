@@ -102,7 +102,8 @@ final class NotchModel {
     var templateLoadError: String?
     /// テンプレートを保存する（新規・編集）。保存できなければ理由を返す。
     @ObservationIgnored var onSaveTemplate: ((PromptTemplate) -> [String])?
-    @ObservationIgnored var onDeleteTemplate: ((PromptTemplate.ID) -> Void)?
+    /// 削除できなければ理由を返す。
+    @ObservationIgnored var onDeleteTemplate: ((PromptTemplate.ID) -> [String])?
 
     // MARK: - クイック入力（ROADMAP 3-5）
 

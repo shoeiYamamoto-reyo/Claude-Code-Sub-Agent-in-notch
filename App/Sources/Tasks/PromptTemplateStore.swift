@@ -13,7 +13,7 @@ final class PromptTemplateStore {
         self.model = model
         filePath = PromptTemplateFile.path(home: home)
         model.onSaveTemplate = { [weak self] template in self?.save(template) ?? ["保存できません。"] }
-        model.onDeleteTemplate = { [weak self] id in self?.delete(id) }
+        model.onDeleteTemplate = { [weak self] id in self?.delete(id) ?? ["削除できません。"] }
     }
 
     func load() {
@@ -41,11 +41,12 @@ final class PromptTemplateStore {
         return write(updated)
     }
 
-    private func delete(_ id: PromptTemplate.ID) {
-        guard model.templateLoadError == nil else { return }
+    /// 削除できなければ理由を返す。
+    private func delete(_ id: PromptTemplate.ID) -> [String] {
+        if let error = model.templateLoadError { return [error] }
         var updated = model.templates
-        guard updated.remove(id: id) != nil else { return }
-        _ = write(updated)
+        guard updated.remove(id: id) != nil else { return [] }
+        return write(updated)
     }
 
     private func write(_ library: PromptTemplateLibrary) -> [String] {

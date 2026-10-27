@@ -14,6 +14,8 @@ struct QuickTaskBar: View {
     /// nil なら「おまかせ」。
     @State private var agent: String?
     @State private var agents: [String] = []
+    /// テンプレートでプロジェクトを変えたとき、読み直したあとに選ぶエージェント。
+    @State private var pendingAgent: String?
     @State private var problem: String?
     @FocusState private var isFocused: Bool
 
@@ -164,6 +166,7 @@ struct QuickTaskBar: View {
         guard let directory = selectedProject?.directory else {
             agents = []
             agent = nil
+            pendingAgent = nil
             return
         }
         Task {
@@ -174,6 +177,14 @@ struct QuickTaskBar: View {
             guard selectedProject?.directory == directory else { return }
             agents = names
             if let agent, !names.contains(agent) { self.agent = nil }
+            if let name = pendingAgent {
+                pendingAgent = nil
+                if names.contains(name) {
+                    agent = name
+                } else {
+                    problem = "エージェント「\(name)」はこのプロジェクトに無いので、おまかせで始めます。"
+                }
+            }
         }
     }
 
@@ -181,9 +192,11 @@ struct QuickTaskBar: View {
     private func apply(_ template: PromptTemplate) {
         problem = nil
         model.quickInputDraft = template.prompt
+        pendingAgent = nil
         if let id = template.projectID, model.projects.project(id: id) != nil, id != projectID {
-            // エージェントは読み直したあと、無ければ「おまかせ」に戻る（`reloadAgents`）。
-            agent = template.agent
+            // 新しいプロジェクトの定義を読み直してから選ぶ（`reloadAgents`）。それまでは「おまかせ」。
+            agent = nil
+            pendingAgent = template.agent
             projectID = id
         } else if let name = template.agent, !agents.contains(name) {
             agent = nil
