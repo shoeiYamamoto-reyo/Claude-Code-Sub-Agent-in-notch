@@ -46,16 +46,13 @@ final class EyeTrackingTests: XCTestCase {
 }
 
 final class CharacterAnimationTests: XCTestCase {
-    func testIdleBreathingStaysWithinSpec() {
-        var minScaleY: CGFloat = 1
-        var maxScaleX: CGFloat = 1
-        for step in 0..<360 {
+    func testIdleBodyStaysStill() {
+        for step in 0..<450 {
             let pose = CharacterAnimation.pose(for: .idle, at: Double(step) * 0.01)
-            minScaleY = min(minScaleY, pose.scaleY)
-            maxScaleX = max(maxScaleX, pose.scaleX)
+            XCTAssertEqual(pose.scaleX, 1)
+            XCTAssertEqual(pose.scaleY, 1)
+            XCTAssertEqual(pose.offsetY, 0)
         }
-        XCTAssertEqual(maxScaleX, 1.04, accuracy: 0.001)
-        XCTAssertEqual(minScaleY, 0.95, accuracy: 0.001)
     }
 
     func testBlinkHappensOncePerInterval() {
@@ -64,10 +61,34 @@ final class CharacterAnimationTests: XCTestCase {
         XCTAssertLessThan(CharacterAnimation.blinkOpenness(at: 4.5 + 0.09), 0.3)
     }
 
-    func testIdleBlinkIsVisibleAtIdleFrameRate() {
-        // 待機中の描画間隔でも、まばたきが少なくとも 1 フレームは描かれる。
-        let interval = CharacterAnimation.frameInterval(for: .idle)!
-        XCTAssertLessThan(interval, CharacterAnimation.blinkDuration / 2)
+    /// 待機中は、まばたきの間だけ描く。まばたきの外では次のまばたきまで起きない。
+    func testIdleDrawsOnlyAroundBlinks() throws {
+        let interval = CharacterAnimation.blinkInterval
+        // まばたきの外: 次のまばたきの始まりまで待つ。
+        XCTAssertEqual(try XCTUnwrap(CharacterAnimation.nextFrameTime(after: 1, for: .idle)), interval, accuracy: 1e-9)
+        XCTAssertEqual(
+            try XCTUnwrap(CharacterAnimation.nextFrameTime(after: interval * 100 + 2, for: .idle)),
+            interval * 101,
+            accuracy: 1e-6
+        )
+        // まばたきを描き、その後の開いた目まで描いたら、次のまばたきまで止まる。
+        var time = interval * 3
+        var frames: [TimeInterval] = []
+        while time < interval * 4 {
+            frames.append(time)
+            time = try XCTUnwrap(CharacterAnimation.nextFrameTime(after: time, for: .idle))
+        }
+        XCTAssertEqual(time, interval * 4, accuracy: 1e-6)
+        XCTAssertGreaterThanOrEqual(frames.filter { CharacterAnimation.blinkOpenness(at: $0) < 0.5 }.count, 1)
+        XCTAssertEqual(CharacterAnimation.blinkOpenness(at: frames.last!), 1)
+        // 1 回のまばたきで描くのは 10 フレーム以下（4.5 秒あたり）。
+        XCTAssertLessThanOrEqual(frames.count, 10)
+    }
+
+    func testMovingMoodsDrawAt30FPS() throws {
+        for mood in [CharacterMood.working, .waiting, .done] {
+            XCTAssertEqual(try XCTUnwrap(CharacterAnimation.nextFrameTime(after: 2, for: mood)), 2 + 1.0 / 30, accuracy: 1e-9)
+        }
     }
 
     func testWaitingHopsUpAndLands() {
@@ -83,7 +104,7 @@ final class CharacterAnimationTests: XCTestCase {
     }
 
     func testErrorIsSquashedAndStatic() {
-        XCTAssertNil(CharacterAnimation.frameInterval(for: .error))
+        XCTAssertNil(CharacterAnimation.nextFrameTime(after: 0, for: .error))
         let a = CharacterAnimation.pose(for: .error, at: 0)
         let b = CharacterAnimation.pose(for: .error, at: 1.234)
         XCTAssertEqual(a, b)

@@ -199,20 +199,33 @@ public struct CharacterPose: Sendable, Equatable {
 
 /// 状態ごとの動き（`docs/design/character.md` の表）。時刻の関数にして、描画頻度とは切り離す。
 public enum CharacterAnimation {
-    public static let breathingPeriod: TimeInterval = 3.6
     public static let blinkInterval: TimeInterval = 4.5
     public static let blinkDuration: TimeInterval = 0.18
     public static let workingPeriod: TimeInterval = 0.7
     public static let hopPeriod: TimeInterval = 1.2
     public static let swayPeriod: TimeInterval = 1.6
 
-    /// 描き直す間隔（秒）。nil は動かない（状態が変わったときと目の追従のときだけ描く）。
-    /// 待機中は常時表示なので頻度を下げ、CPU をほぼ使わないようにする。
-    public static func frameInterval(for mood: CharacterMood) -> TimeInterval? {
+    /// 動いている間の描き直しの間隔（30 fps）。
+    public static let frameInterval: TimeInterval = 1.0 / 30
+
+    /// `time` の次に描き直す時刻（秒）。nil ならもう描かない（状態が変わったときと目の追従のときだけ描く）。
+    ///
+    /// 待機中は常時表示なので、体は動かさず、まばたきの間（`blinkDuration`）だけ描く。それ以外の時間は
+    /// 次のまばたきまでタイマーが起きないので、CPU をほぼ使わない（REQUIREMENTS の性能目標）。
+    public static func nextFrameTime(after time: TimeInterval, for mood: CharacterMood) -> TimeInterval? {
         switch mood {
-        case .idle: 1.0 / 12
-        case .working, .waiting, .done: 1.0 / 30
-        case .error: nil
+        case .idle:
+            let blinkStart = time - fraction(time, period: blinkInterval) * blinkInterval
+            if time - blinkStart < blinkDuration {
+                // まばたき中。最後のフレームは開いた目に戻すため、まばたきの後に 1 回描く。
+                return time + frameInterval
+            }
+            // 端数で同じ時刻に戻らないよう、少なくとも 1 フレーム先にする。
+            return max(blinkStart + blinkInterval, time + frameInterval)
+        case .working, .waiting, .done:
+            return time + frameInterval
+        case .error:
+            return nil
         }
     }
 
@@ -228,9 +241,7 @@ public enum CharacterAnimation {
         if reduceMotion { return pose }
         switch mood {
         case .idle:
-            let s = wave(time, period: breathingPeriod)
-            pose.scaleX = 1 + 0.04 * s
-            pose.scaleY = 1 - 0.05 * s
+            // 体は動かさない（呼吸をやめて、まばたきの間だけ描く）。
             pose.eyeOpenness = blinkOpenness(at: time)
         case .working:
             pose.offsetY = -2 * wave(time, period: workingPeriod)
