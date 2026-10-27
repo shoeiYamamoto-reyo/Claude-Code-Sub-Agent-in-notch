@@ -94,6 +94,16 @@ final class NotchModel {
     /// 設定画面の「履歴を消去」（`TaskHistoryStore.clear`）。
     @ObservationIgnored var onClearTaskHistory: (() -> Void)?
 
+    // MARK: - テンプレート（ROADMAP 5-5）
+
+    /// 指示のテンプレート。変更は `PromptTemplateStore` だけが行う。
+    var templates = PromptTemplateLibrary()
+    /// 保存ファイルを読めなかったときの説明。この間は保存・削除できない。
+    var templateLoadError: String?
+    /// テンプレートを保存する（新規・編集）。保存できなければ理由を返す。
+    @ObservationIgnored var onSaveTemplate: ((PromptTemplate) -> [String])?
+    @ObservationIgnored var onDeleteTemplate: ((PromptTemplate.ID) -> Void)?
+
     // MARK: - クイック入力（ROADMAP 3-5）
 
     /// ノッチで指示を入力しているか。この間はパネルがキー入力を受け、マウスが離れても縮まない。

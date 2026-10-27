@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var agentEditor = AgentEditor(model: model)
     lazy var claudeSetup = ClaudeSetup(model: model)
     lazy var taskHistory = TaskHistoryStore(model: model)
+    lazy var templateStore = PromptTemplateStore(model: model)
     lazy var taskRunner = TaskRunner(model: model, claude: claudeSetup, history: taskHistory)
     lazy var taskLauncher = TaskLauncher(model: model, runner: taskRunner)
     lazy var taskResultViewer = TaskResultViewer(model: model)
@@ -58,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = agentEditor
         claudeSetup.start()
         taskHistory.load()
+        templateStore.load()
         _ = taskLauncher
         _ = taskResultViewer
         model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }
