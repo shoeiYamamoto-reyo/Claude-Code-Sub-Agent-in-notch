@@ -6,8 +6,8 @@ struct SoundMenu: View {
     let sound: SoundPlayer
 
     var body: some View {
+        // 音を止めていても、おやすみモードを終えられるように無効にはしない。
         quietMenu(sound.settings)
-            .disabled(!sound.settings.isEnabled)
     }
 
     @ViewBuilder

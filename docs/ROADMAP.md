@@ -74,7 +74,7 @@
 | 5-9 | ☐ 公開準備: 英語対応、アプリ署名と公証、README のインストール手順、リリース自動化 | swift-macos-engineer | 署名・公証済みの配布物ができる | 手動 |
 
 メモ
-- 待機中の CPU 使用率（課題）: 2026-10-26 に手元の Mac（Debug ビルド）で測ると、待機中（`idle`）でも約 5 %、作業中は約 8 %（`top` で 2 秒ごとに 10 回）。待機中も 12 fps で `Canvas` を描き直し続けているのが主な原因とみられる（`CharacterAnimation.frameInterval`）。目のマウス追従はこのままにする前提で、待機中の描き直しを止める・間隔を広げるなどを検討する。REQUIREMENTS の性能目標（ほぼ 0 %）は未達。 → 待機中は呼吸をやめ、まばたきの間（4.5 秒ごとに約 0.2 秒）と目の追従中だけ描くようにした（`CharacterAnimation.nextFrameTime`）。手元の Mac での再計測待ち。
+- 待機中の CPU 使用率（課題）: 2026-10-26 に手元の Mac（Debug ビルド）で測ると、待機中（`idle`）でも約 5 %、作業中は約 8 %（`top` で 2 秒ごとに 10 回）。待機中も 12 fps で `Canvas` を描き直し続けているのが主な原因とみられる（`CharacterAnimation.frameInterval`）。目のマウス追従はこのままにする前提で、待機中の描き直しを止める・間隔を広げるなどを検討する。REQUIREMENTS の性能目標（ほぼ 0 %）は未達。 → 待機中は呼吸をやめ、まばたきの間（4.5 秒ごとに約 0.2 秒）と目の追従中だけ描くようにした（`CharacterAnimation.nextFrameTime`）。2026-10-27 に手元の Mac で確かめ、問題なしとの報告（数値は未記録）。
 
 ## M6. 他アプリの通知（拡張）
 方針は [external-notifications.md](external-notifications.md)。6-1〜6-4 は M2 の後ならいつでも着手できる（ソケットと承認キューの優先度付けが前提）。
