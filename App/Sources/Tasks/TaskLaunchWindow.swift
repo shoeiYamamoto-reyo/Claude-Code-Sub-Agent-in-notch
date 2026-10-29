@@ -91,7 +91,7 @@ final class TaskLauncher {
             // チェックアウトに時間がかかることがあるので、別スレッドで作る。
             let directory = project.directory
             let result = await Task.detached(priority: .userInitiated) { () -> Result<GitWorktree.Plan, GitWorktree.Failure> in
-                do {
+                do throws(GitWorktree.Failure) {
                     return .success(try GitWorktree.create(projectDirectory: directory, sessionID: sessionID))
                 } catch {
                     return .failure(error)

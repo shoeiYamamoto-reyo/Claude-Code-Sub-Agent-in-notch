@@ -367,7 +367,7 @@ final class TaskRunner {
         guard let run = model.tasks.first(where: { $0.id == id }), let path = run.worktreePath else { return nil }
         guard !run.isActive else { return "まだ動いています。終わってから消してください。" }
         let result = await Task.detached(priority: .userInitiated) { () -> String? in
-            do {
+            do throws(GitWorktree.Failure) {
                 try GitWorktree.remove(path: path)
                 return nil
             } catch {
