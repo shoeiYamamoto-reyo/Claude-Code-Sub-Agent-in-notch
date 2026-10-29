@@ -333,7 +333,11 @@ final class TaskRunner {
         // 秘密でない変数だけ渡す（秘密はファイルに書かない）。PATH はタスクと同じものにする。
         let variables = project.environment.normalized().variables
         let path = TaskCommand.environment(
-            base: [:], loginShellPath: claude.loginShellPath, project: ProjectEnvironment(), secrets: [:], executable: executable
+            base: ProcessInfo.processInfo.environment,
+            loginShellPath: claude.loginShellPath,
+            project: ProjectEnvironment(),
+            secrets: [:],
+            executable: executable
         )["PATH"]
         let script = TerminalLaunch.script(
             directory: directory,

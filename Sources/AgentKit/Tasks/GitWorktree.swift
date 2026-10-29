@@ -20,12 +20,17 @@ public enum GitWorktree {
 
     public enum Failure: Error, Sendable, Equatable {
         case notRepository(String)
+        /// git を起動できなかった（入っていないなど）。
+        case cannotRun(String)
+        /// git が 0 以外で終わった。
         case gitFailed(String)
 
         public var message: String {
             switch self {
             case .notRepository(let directory):
                 "\(directory) は git のリポジトリではないため、worktree で分けられません。"
+            case .cannotRun(let detail):
+                "git を実行できません: \(detail)"
             case .gitFailed(let detail):
                 "git が失敗しました: \(detail)"
             }
@@ -63,7 +68,8 @@ public enum GitWorktree {
         let prefix: String
         do {
             prefix = try run(git: git, ["rev-parse", "--show-prefix"], in: projectDirectory)
-        } catch {
+        } catch .gitFailed {
+            // git は動いたが、リポジトリの中ではなかった。
             throw .notRepository(projectDirectory)
         }
         let plan = plan(projectDirectory: projectDirectory, prefix: prefix, sessionID: sessionID)
@@ -95,7 +101,7 @@ public enum GitWorktree {
         do {
             try process.run()
         } catch {
-            throw .gitFailed(error.localizedDescription)
+            throw .cannotRun(error.localizedDescription)
         }
         // 出力が大きくても詰まらないよう、終わるのを待つ前に読む。
         let data = output.fileHandleForReading.readDataToEndOfFile()
