@@ -4,6 +4,7 @@ import SwiftUI
 
 /// 設定画面（ROADMAP 5-1）。メニューバーの「設定…」（⌘,）で開く。
 /// メニューにあったサウンドと表示する画面の設定をここに移し、ログイン時の起動を加えた。
+/// 指示のテンプレート（ROADMAP 5-5）もここで管理する。
 struct SettingsView: View {
     let model: NotchModel
     let controller: NotchPanelController
@@ -17,10 +18,12 @@ struct SettingsView: View {
                 .tabItem { Label("一般", systemImage: "gearshape") }
             SoundSettingsView(sound: controller.sound)
                 .tabItem { Label("サウンド", systemImage: "speaker.wave.2") }
+            TemplateSettingsView(model: model)
+                .tabItem { Label("テンプレート", systemImage: "text.badge.star") }
             ClaudeSettings(model: model, hookSetup: hookSetup, claudeSetup: claudeSetup)
                 .tabItem { Label("Claude Code", systemImage: "terminal") }
         }
-        .frame(width: 500, height: 440)
+        .frame(width: 560, height: 480)
     }
 }
 

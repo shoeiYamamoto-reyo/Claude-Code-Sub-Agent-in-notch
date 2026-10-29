@@ -6,6 +6,7 @@ import SwiftUI
 /// ホバーで展開 → 入力欄を押して入力 → Return で開始、の 3 操作。⌃⌥⌘N でも入力を始められる。
 /// プロジェクトは最後に使ったもの（`QuickTaskDefaults`）、エージェントは「おまかせ」から始める。
 /// 長い指示は「プロジェクト」タブの「タスクを開始…」のウインドウで書く。
+/// 保存したテンプレート（ROADMAP 5-5）を選ぶと、指示・エージェント・プロジェクトが入る。
 struct QuickTaskBar: View {
     let model: NotchModel
 
@@ -13,6 +14,8 @@ struct QuickTaskBar: View {
     /// nil なら「おまかせ」。
     @State private var agent: String?
     @State private var agents: [String] = []
+    /// テンプレートでプロジェクトを変えたとき、読み直したあとに選ぶエージェント。
+    @State private var pendingAgent: String?
     @State private var problem: String?
     @FocusState private var isFocused: Bool
 
@@ -68,6 +71,16 @@ struct QuickTaskBar: View {
                     }
                 } label: {
                     Label(agent ?? "おまかせ", systemImage: "person.crop.circle")
+                }
+                let templates = model.templates.available(for: projectID)
+                if !templates.isEmpty {
+                    Menu {
+                        ForEach(templates) { template in
+                            Button(template.name) { apply(template) }
+                        }
+                    } label: {
+                        Label("テンプレート", systemImage: "text.badge.star")
+                    }
                 }
                 Spacer()
                 if let directory = selectedProject?.directory {
@@ -153,6 +166,7 @@ struct QuickTaskBar: View {
         guard let directory = selectedProject?.directory else {
             agents = []
             agent = nil
+            pendingAgent = nil
             return
         }
         Task {
@@ -163,7 +177,34 @@ struct QuickTaskBar: View {
             guard selectedProject?.directory == directory else { return }
             agents = names
             if let agent, !names.contains(agent) { self.agent = nil }
+            if let name = pendingAgent {
+                pendingAgent = nil
+                if names.contains(name) {
+                    agent = name
+                } else {
+                    problem = "エージェント「\(name)」はこのプロジェクトに無いので、おまかせで始めます。"
+                }
+            }
         }
+    }
+
+    /// テンプレートの内容を入れる。下書きは置き換える。
+    private func apply(_ template: PromptTemplate) {
+        problem = nil
+        model.quickInputDraft = template.prompt
+        pendingAgent = nil
+        if let id = template.projectID, model.projects.project(id: id) != nil, id != projectID {
+            // 新しいプロジェクトの定義を読み直してから選ぶ（`reloadAgents`）。それまでは「おまかせ」。
+            agent = nil
+            pendingAgent = template.agent
+            projectID = id
+        } else if let name = template.agent, !agents.contains(name) {
+            agent = nil
+            problem = "エージェント「\(name)」はこのプロジェクトに無いので、おまかせで始めます。"
+        } else {
+            agent = template.agent
+        }
+        isFocused = true
     }
 
     private func start() {
