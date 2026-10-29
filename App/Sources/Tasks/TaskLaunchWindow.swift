@@ -16,9 +16,9 @@ final class TaskLauncher {
         self.model = model
         self.runner = runner
         model.onStartTask = { [weak self] projectID in self?.open(projectID: projectID) }
-        model.onQuickStart = { [weak self] projectID, agent, prompt in
+        model.onQuickStart = { [weak self] projectID, agent, prompt, separate in
             guard let self else { return "タスクを始められません。" }
-            return self.start(projectID: projectID, agent: agent, prompt: prompt)
+            return await self.start(projectID: projectID, agent: agent, prompt: prompt, separate: separate)
         }
         model.lastTaskProjectID = UserDefaults.standard.string(forKey: Self.lastProjectKey).flatMap(UUID.init(uuidString:))
     }
@@ -51,10 +51,11 @@ final class TaskLauncher {
             // ビューの中から呼ぶので、保存すればメニューも変わる（Observation）。
             templates: { [model] projectID in model.templates.available(for: projectID) },
             onSaveTemplate: { [model] template in model.onSaveTemplate?(template) ?? ["保存できません。"] },
+            isBusy: { [model] projectID in model.projects.project(id: projectID).map { model.isProjectBusy($0) } ?? false },
             onCancel: { [weak self] in self?.close() },
-            onStart: { [weak self] projectID, agent, prompt in
+            onStart: { [weak self] projectID, agent, prompt, separate in
                 guard let self else { return nil }
-                let problem = self.start(projectID: projectID, agent: agent, prompt: prompt)
+                let problem = await self.start(projectID: projectID, agent: agent, prompt: prompt, separate: separate)
                 if problem == nil { self.close() }
                 return problem
             }
@@ -75,8 +76,8 @@ final class TaskLauncher {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// 始められなければ理由を返す。
-    func start(projectID: Project.ID, agent: String?, prompt: String) -> String? {
+    /// 始められなければ理由を返す。`separate` なら git worktree を作ってその中で動かす（ROADMAP 5-6、F2-5）。
+    func start(projectID: Project.ID, agent: String?, prompt: String, separate: Bool = false) async -> String? {
         guard let project = model.projects.project(id: projectID) else { return "プロジェクトが見つかりません。" }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "指示を入力してください。" }
@@ -84,7 +85,31 @@ final class TaskLauncher {
         guard FileManager.default.fileExists(atPath: project.directory, isDirectory: &isDirectory), isDirectory.boolValue else {
             return "作業フォルダがありません: \(project.directory)"
         }
-        if let error = runner.start(TaskRequest(projectID: project.id, agent: agent, prompt: trimmed), project: project) {
+        let sessionID = UUID()
+        var worktree: GitWorktree.Plan?
+        if separate {
+            // チェックアウトに時間がかかることがあるので、別スレッドで作る。
+            let directory = project.directory
+            let result = await Task.detached(priority: .userInitiated) { () -> Result<GitWorktree.Plan, GitWorktree.Failure> in
+                do {
+                    return .success(try GitWorktree.create(projectDirectory: directory, sessionID: sessionID))
+                } catch {
+                    return .failure(error)
+                }
+            }.value
+            switch result {
+            case .success(let plan): worktree = plan
+            case .failure(let failure): return failure.message
+            }
+        }
+        let request = TaskRequest(
+            projectID: project.id, agent: agent, prompt: trimmed, sessionID: sessionID, directory: worktree?.workingDirectory
+        )
+        if let error = runner.start(request, project: project, worktree: worktree) {
+            // 作ったばかりの worktree は残さない（ブランチは残る）。
+            if let path = worktree?.path {
+                Task.detached(priority: .utility) { _ = try? GitWorktree.remove(path: path) }
+            }
             return error
         }
         model.lastTaskProjectID = project.id
@@ -104,8 +129,9 @@ private struct TaskLaunchView: View {
     let loadAgents: (String) -> [String]
     let templates: (Project.ID) -> [PromptTemplate]
     let onSaveTemplate: (PromptTemplate) -> [String]
+    let isBusy: (Project.ID) -> Bool
     let onCancel: () -> Void
-    let onStart: (Project.ID, String?, String) -> String?
+    let onStart: @MainActor (Project.ID, String?, String, Bool) async -> String?
 
     @State private var projectID: Project.ID
     /// 空なら「おまかせ」。
@@ -114,6 +140,9 @@ private struct TaskLaunchView: View {
     @State private var prompt = ""
     @State private var problem: String?
     @State private var isSavingTemplate = false
+    /// ほかのタスクが動いていても、worktree で分けずに同じフォルダで動かす。
+    @State private var keepInPlace = false
+    @State private var isStarting = false
 
     init(
         projects: [Project],
@@ -122,14 +151,16 @@ private struct TaskLaunchView: View {
         loadAgents: @escaping (String) -> [String],
         templates: @escaping (Project.ID) -> [PromptTemplate],
         onSaveTemplate: @escaping (PromptTemplate) -> [String],
+        isBusy: @escaping (Project.ID) -> Bool,
         onCancel: @escaping () -> Void,
-        onStart: @escaping (Project.ID, String?, String) -> String?
+        onStart: @escaping @MainActor (Project.ID, String?, String, Bool) async -> String?
     ) {
         self.projects = projects
         self.claudePath = claudePath
         self.loadAgents = loadAgents
         self.templates = templates
         self.onSaveTemplate = onSaveTemplate
+        self.isBusy = isBusy
         self.onCancel = onCancel
         self.onStart = onStart
         _projectID = State(initialValue: initialProjectID)
@@ -177,6 +208,13 @@ private struct TaskLaunchView: View {
                         .foregroundStyle(.orange)
                 }
             }
+            if isBusy(projectID) {
+                Toggle("ほかのタスクが動いているので、git worktree で分けて動かす", isOn: Binding(
+                    get: { !keepInPlace },
+                    set: { keepInPlace = !$0 }
+                ))
+                .help("プロジェクトの .claude/worktrees/ に作業場所を作り、新しいブランチで動かします")
+            }
             if claudePath == nil {
                 Label("claude コマンドが見つかっていません。メニューバーの「claude の場所を指定…」で指定してください。", systemImage: "exclamationmark.triangle")
                     .font(.callout)
@@ -196,11 +234,16 @@ private struct TaskLaunchView: View {
                 Spacer()
                 Button("キャンセル", role: .cancel, action: onCancel)
                     .keyboardShortcut(.cancelAction)
-                Button("開始") {
-                    problem = onStart(projectID, agent.isEmpty ? nil : agent, prompt)
+                Button(isStarting ? "準備中…" : "開始") {
+                    let separate = isBusy(projectID) && !keepInPlace
+                    isStarting = true
+                    Task {
+                        problem = await onStart(projectID, agent.isEmpty ? nil : agent, prompt, separate)
+                        isStarting = false
+                    }
                 }
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isStarting || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(20)

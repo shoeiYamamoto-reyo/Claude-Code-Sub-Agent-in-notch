@@ -137,4 +137,21 @@ final class TaskHistoryTests: XCTestCase {
             guard case .invalid = error as? ProjectRegistryFile.LoadError else { return XCTFail("\(error)") }
         }
     }
+
+    func testWorktreeIsKeptAndCanBeForgotten() throws {
+        var history = TaskHistory()
+        let id = UUID()
+        history.begin(TaskHistoryEntry(
+            id: id, projectID: project, projectName: "app", agent: nil, prompt: "p", startedAt: start,
+            workingDirectory: "/app/.claude/worktrees/notch-1", worktreePath: "/app/.claude/worktrees/notch-1", worktreeBranch: "notch/1"
+        ))
+        let decoded = try TaskHistoryFile.decode(TaskHistoryFile.encode(history))
+        XCTAssertEqual(decoded.entry(id: id)?.worktreeBranch, "notch/1")
+        history.worktreeRemoved(id: id)
+        XCTAssertNil(history.entry(id: id)?.worktreePath)
+        XCTAssertEqual(history.entry(id: id)?.workingDirectory, "/app/.claude/worktrees/notch-1")
+        // 前の形式（worktree の項目が無い）も読める。
+        let old = #"{"version": 1, "entries": [{"id": "\#(UUID().uuidString)", "projectID": "\#(project.uuidString)", "projectName": "a", "prompt": "p", "followUps": [], "startedAt": "2027-01-15T08:00:00Z", "outcome": "finished", "filesChanged": 0, "linesAdded": 0, "linesRemoved": 0}]}"#
+        XCTAssertNil(try TaskHistoryFile.decode(Data(old.utf8)).entries.first?.worktreePath)
+    }
 }

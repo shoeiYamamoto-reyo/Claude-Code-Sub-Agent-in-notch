@@ -41,6 +41,11 @@ struct TaskRun: Identifiable, Equatable {
     var transcript = TaskTranscript()
     /// 履歴から開き直したとき、出力ファイルが消えていれば履歴に残した最後の応答（ROADMAP 5-4）。
     var restoredSummary: String?
+    /// 動かしたフォルダ。nil ならプロジェクトのフォルダ（ROADMAP 5-6）。
+    var workingDirectory: String?
+    /// worktree で分けたときの場所とブランチ。消したら nil。
+    var worktreePath: String?
+    var worktreeBranch: String?
 
     var isActive: Bool { state == .running || state == .stopping }
 
@@ -58,6 +63,8 @@ struct TaskRun: Identifiable, Equatable {
 ///   シグナルは子のプロセスグループに送る（Bash ツールから起動したものも残さない）。
 /// - アプリの終了時は動いているタスクに SIGTERM を送る（待たない）。
 /// - 出力ファイルは起動時に古いものを消す（`TaskOutputRetention`）。
+/// - 同じプロジェクトでほかのタスクが動いているときは、git worktree で分けて動かせる（`TaskLauncher`、ROADMAP 5-6）。
+///   続きも同じ worktree で動かす。終わったタスクはターミナルで開いて手で続けられる（`openInTerminal`）。
 /// - 始めた・続けた・終わったときに履歴に残す（`TaskHistoryStore`、ROADMAP 5-4）。一覧から消えたタスクは、
 ///   履歴から出力ファイルを読み直して一覧に戻せる（`showHistory`）。
 @MainActor
@@ -84,6 +91,8 @@ final class TaskRunner {
             return self.continueTask(id, prompt: prompt)
         }
         model.onShowHistoryEntry = { [weak self] id in self?.showHistory(id) }
+        model.onOpenTaskInTerminal = { [weak self] id in self?.openInTerminal(id) ?? "開けません。" }
+        model.onRemoveWorktree = { [weak self] id in await self?.removeWorktree(id) }
         Self.removeOldOutputs()
     }
 
@@ -93,10 +102,10 @@ final class TaskRunner {
             .appendingPathComponent("tasks", isDirectory: true)
     }
 
-    /// タスクを始める。始められなければ理由を返す。
-    func start(_ request: TaskRequest, project: Project) -> String? {
+    /// タスクを始める。始められなければ理由を返す。`worktree` は `request.directory` を作った worktree。
+    func start(_ request: TaskRequest, project: Project, worktree: GitWorktree.Plan? = nil) -> String? {
         if let problem = launch(request, project: project) { return problem }
-        let run = TaskRun(
+        var run = TaskRun(
             id: request.sessionID,
             projectID: project.id,
             projectName: project.name,
@@ -106,6 +115,9 @@ final class TaskRunner {
             state: .running,
             outputPath: Self.outputURL(for: request.sessionID).path
         )
+        run.workingDirectory = request.directory
+        run.worktreePath = worktree?.path
+        run.worktreeBranch = worktree?.branch
         model.tasks.insert(run, at: 0)
         trimFinished()
         history.begin(run)
@@ -123,11 +135,15 @@ final class TaskRunner {
         }
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "追加の指示を入力してください。" }
+        // セッションは動かしたフォルダに結び付いているので、worktree で始めたものは同じ worktree で続ける。
+        let directory = run.workingDirectory ?? project.directory
         var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: project.directory, isDirectory: &isDirectory), isDirectory.boolValue else {
-            return "作業フォルダがありません: \(project.directory)"
+        guard FileManager.default.fileExists(atPath: directory, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return "作業フォルダがありません: \(directory)"
         }
-        let request = TaskRequest(projectID: project.id, agent: run.agent, prompt: trimmed, sessionID: id, resume: true)
+        let request = TaskRequest(
+            projectID: project.id, agent: run.agent, prompt: trimmed, sessionID: id, resume: true, directory: run.workingDirectory
+        )
         if let problem = launch(request, project: project) { return problem }
         // 動いているものとして一覧の先頭に移す。出力を読む前（同じ MainActor の中）に結果の区切りを入れる。
         guard let index = model.tasks.firstIndex(where: { $0.id == id }) else { return nil }
@@ -192,7 +208,7 @@ final class TaskRunner {
             secrets: secrets,
             executable: executable
         )
-        process.currentDirectoryURL = URL(fileURLWithPath: project.directory, isDirectory: true)
+        process.currentDirectoryURL = URL(fileURLWithPath: request.directory ?? project.directory, isDirectory: true)
         let input = Pipe()
         let stdout = Pipe()
         let errors = Pipe()
@@ -291,11 +307,77 @@ final class TaskRunner {
                 transcript: transcript ?? TaskTranscript()
             )
             if transcript?.lastAssistantText == nil { run.restoredSummary = entry.summary }
+            run.workingDirectory = entry.workingDirectory
+            run.worktreePath = entry.worktreePath
+            run.worktreeBranch = entry.worktreeBranch
             // 動いているものの後ろ、始めた順の位置に入れる。
             let index = model.tasks.firstIndex { !$0.isActive && $0.startedAt < run.startedAt } ?? model.tasks.endIndex
             model.tasks.insert(run, at: index)
             model.onShowTask?(id)
         }
+    }
+
+    /// 終わったタスクのセッションをターミナルで開き、対話モードの claude で続ける（ROADMAP 5-6、F2-7）。
+    /// 開けなければ理由を返す。
+    func openInTerminal(_ id: UUID) -> String? {
+        guard let run = model.tasks.first(where: { $0.id == id }) else { return "このタスクは一覧から消えました。" }
+        guard !run.isActive else { return "まだ動いています。終わってから開いてください。" }
+        guard let project = model.projects.project(id: run.projectID) else {
+            return "プロジェクト「\(run.projectName)」が見つかりません（削除された可能性があります）。"
+        }
+        guard let executable = claude.executablePath() else {
+            return "claude コマンドが見つかりません。設定の「Claude Code」で場所を指定してください。"
+        }
+        let directory = run.workingDirectory ?? project.directory
+        guard FileManager.default.fileExists(atPath: directory) else { return "作業フォルダがありません: \(directory)" }
+        // 秘密でない変数だけ渡す（秘密はファイルに書かない）。PATH はタスクと同じものにする。
+        let variables = project.environment.normalized().variables
+        let path = TaskCommand.environment(
+            base: [:], loginShellPath: claude.loginShellPath, project: ProjectEnvironment(), secrets: [:], executable: executable
+        )["PATH"]
+        let script = TerminalLaunch.script(
+            directory: directory,
+            executable: executable,
+            arguments: TerminalLaunch.resumeArguments(sessionID: id, agent: run.agent, environment: project.environment),
+            path: path,
+            environment: Dictionary(
+                variables.filter { !$0.isSecret }.map { ($0.name, $0.value ?? "") },
+                uniquingKeysWith: { _, last in last }
+            ),
+            omittedSecrets: variables.filter(\.isSecret).map(\.name)
+        )
+        let folder = Self.outputDirectory.deletingLastPathComponent().appendingPathComponent("terminal", isDirectory: true)
+        let file = folder.appendingPathComponent("\(run.sessionID).command")
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try Data(script.utf8).write(to: file, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: file.path)
+        } catch {
+            return "ターミナルで開くファイルを作れませんでした: \(error.localizedDescription)"
+        }
+        guard NSWorkspace.shared.open(file) else {
+            try? FileManager.default.removeItem(at: file)
+            return "ターミナルを開けませんでした。"
+        }
+        return nil
+    }
+
+    /// worktree を消す（`git worktree remove`、変更が残っていれば git が断る）。ブランチは残す。消せなければ理由を返す。
+    func removeWorktree(_ id: UUID) async -> String? {
+        guard let run = model.tasks.first(where: { $0.id == id }), let path = run.worktreePath else { return nil }
+        guard !run.isActive else { return "まだ動いています。終わってから消してください。" }
+        let result = await Task.detached(priority: .userInitiated) { () -> String? in
+            do {
+                try GitWorktree.remove(path: path)
+                return nil
+            } catch {
+                return error.message
+            }
+        }.value
+        if let result { return result }
+        update(id) { $0.worktreePath = nil }
+        history.worktreeRemoved(id)
+        return nil
     }
 
     func stop(_ id: UUID) {

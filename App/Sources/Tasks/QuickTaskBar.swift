@@ -16,6 +16,9 @@ struct QuickTaskBar: View {
     @State private var agents: [String] = []
     /// テンプレートでプロジェクトを変えたとき、読み直したあとに選ぶエージェント。
     @State private var pendingAgent: String?
+    /// ほかのタスクが動いていても、worktree で分けずに同じフォルダで動かす（ROADMAP 5-6）。
+    @State private var keepInPlace = false
+    @State private var isStarting = false
     @State private var problem: String?
     @FocusState private var isFocused: Bool
 
@@ -108,9 +111,20 @@ struct QuickTaskBar: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-                Button("開始", action: start)
+                Button(isStarting ? "準備中…" : "開始", action: start)
                     .buttonStyle(CardButtonStyle(tint: .blue, prominent: true))
-                    .disabled(projectID == nil || isDraftEmpty)
+                    .disabled(projectID == nil || isDraftEmpty || isStarting)
+            }
+
+            if isBusy {
+                Toggle("ほかのタスクが動いているので worktree で分ける", isOn: Binding(
+                    get: { !keepInPlace },
+                    set: { keepInPlace = !$0 }
+                ))
+                .toggleStyle(.checkbox)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.7))
+                .help("プロジェクトの .claude/worktrees/ に作業場所を作り、新しいブランチで動かします")
             }
 
             if let problem {
@@ -146,6 +160,10 @@ struct QuickTaskBar: View {
 
     private var selectedProject: Project? {
         projectID.flatMap { model.projects.project(id: $0) }
+    }
+
+    private var isBusy: Bool {
+        selectedProject.map { model.isProjectBusy($0) } ?? false
     }
 
     private func prepare() {
@@ -208,13 +226,22 @@ struct QuickTaskBar: View {
     }
 
     private func start() {
-        guard let projectID, !isDraftEmpty, let onQuickStart = model.onQuickStart else { return }
-        if let problem = onQuickStart(projectID, agent, model.quickInputDraft) {
-            self.problem = problem
-            return
+        guard let projectID, !isDraftEmpty, !isStarting, let onQuickStart = model.onQuickStart else { return }
+        let prompt = model.quickInputDraft
+        let separate = isBusy && !keepInPlace
+        isStarting = true
+        Task {
+            let problem = await onQuickStart(projectID, agent, prompt, separate)
+            isStarting = false
+            if let problem {
+                self.problem = problem
+                return
+            }
+            self.problem = nil
+            // 準備の間に書き足していなければ消す。
+            if model.quickInputDraft == prompt { model.quickInputDraft = "" }
+            keepInPlace = false
+            model.onEndQuickInput?()
         }
-        problem = nil
-        model.quickInputDraft = ""
-        model.onEndQuickInput?()
     }
 }

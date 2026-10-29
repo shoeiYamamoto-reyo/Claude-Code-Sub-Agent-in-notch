@@ -48,6 +48,7 @@ private struct TaskResultView: View {
 
     @State private var followUp = ""
     @State private var problem: String?
+    @State private var isRemovingWorktree = false
 
     init(model: NotchModel, taskID: UUID, projectDirectory: String?) {
         self.model = model
@@ -126,6 +127,8 @@ private struct TaskResultView: View {
                 continueBox(task)
             }
 
+            workplace(task)
+
             HStack {
                 Text("出力: \(ProjectPath.abbreviate(task.outputPath))")
                     .font(.caption)
@@ -160,6 +163,53 @@ private struct TaskResultView: View {
                         .foregroundStyle(.red)
                 }
             }
+        }
+    }
+
+    /// 動かした場所と、ターミナルで続ける・worktree を消すボタン（ROADMAP 5-6）。
+    private func workplace(_ task: TaskRun) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                if let branch = task.worktreeBranch, task.worktreePath != nil {
+                    Text("worktree（ブランチ \(branch)）")
+                        .font(.caption.weight(.medium))
+                } else if task.worktreeBranch != nil {
+                    Text("worktree は削除済み（ブランチ \(task.worktreeBranch ?? "") は残っています）")
+                        .font(.caption)
+                }
+                Text("作業場所: \(ProjectPath.abbreviate(task.workingDirectory ?? projectDirectory ?? ""))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            Spacer()
+            if task.worktreePath != nil, !task.isActive {
+                Button("worktree を削除…") { confirmRemoveWorktree(task) }
+                    .disabled(isRemovingWorktree)
+                    .help("git worktree remove で消します。変更が残っていれば消しません。ブランチは残します")
+            }
+            Button("ターミナルで続ける") {
+                problem = model.onOpenTaskInTerminal?(task.id)
+            }
+            .disabled(task.isActive)
+            .help("ターミナルで claude --resume を開き、同じ会話を手で続けます")
+        }
+    }
+
+    private func confirmRemoveWorktree(_ task: TaskRun) {
+        guard let path = task.worktreePath else { return }
+        let alert = NSAlert()
+        alert.messageText = "worktree を削除しますか？"
+        alert.informativeText = "\(ProjectPath.abbreviate(path)) を git worktree remove で消します。コミットしていない変更があれば消しません。ブランチ \(task.worktreeBranch ?? "") は残ります。"
+        alert.addButton(withTitle: "削除")
+        alert.addButton(withTitle: "キャンセル")
+        guard alert.runModal() == .alertFirstButtonReturn, let remove = model.onRemoveWorktree else { return }
+        isRemovingWorktree = true
+        Task {
+            problem = await remove(task.id)
+            isRemovingWorktree = false
         }
     }
 

@@ -39,8 +39,16 @@ final class TaskHistoryStore {
             projectName: run.projectName,
             agent: run.agent,
             prompt: run.prompt,
-            startedAt: run.startedAt
+            startedAt: run.startedAt,
+            workingDirectory: run.workingDirectory,
+            worktreePath: run.worktreePath,
+            worktreeBranch: run.worktreeBranch
         ))
+        save()
+    }
+
+    func worktreeRemoved(_ id: UUID) {
+        model.taskHistory.worktreeRemoved(id: id)
         save()
     }
 
