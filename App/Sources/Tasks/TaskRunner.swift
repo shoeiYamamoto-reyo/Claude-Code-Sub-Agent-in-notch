@@ -91,7 +91,11 @@ final class TaskRunner {
             return self.continueTask(id, prompt: prompt)
         }
         model.onShowHistoryEntry = { [weak self] id in self?.showHistory(id) }
-        model.onOpenTaskInTerminal = { [weak self] id in self?.openInTerminal(id) ?? "開けません。" }
+        model.onOpenTaskInTerminal = { [weak self] id in
+            // 開けたときは nil を返すので、`?? "開けません。"` にすると成功まで失敗になる。
+            guard let self else { return "開けません。" }
+            return self.openInTerminal(id)
+        }
         model.onRemoveWorktree = { [weak self] id in await self?.removeWorktree(id) }
         Self.removeOldOutputs()
     }
