@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var projectCenter = ProjectCenter(model: model)
     lazy var agentLibrary = AgentLibrary(model: model)
     lazy var agentEditor = AgentEditor(model: model)
+    lazy var agentLooks = AgentLookStore(model: model)
     lazy var claudeSetup = ClaudeSetup(model: model)
     lazy var taskHistory = TaskHistoryStore(model: model)
     lazy var templateStore = PromptTemplateStore(model: model)
@@ -57,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 定義は「エージェント」タブを開いたときに読む（ここでは受け口だけ用意する）。
         _ = agentLibrary
         _ = agentEditor
+        agentLooks.load()
         claudeSetup.start()
         taskHistory.load()
         templateStore.load()

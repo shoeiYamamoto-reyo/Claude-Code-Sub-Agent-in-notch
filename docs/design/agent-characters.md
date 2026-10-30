@@ -28,6 +28,15 @@
 - マウスを乗せたキャラは左右に揺れ（完了の揺れ、30 fps。待機中の体は動かないため）、一覧の上の欄に name・model・tools・description を出す。押すと編集、右クリックで「編集…」「Finder で表示」。
 - それ以外のキャラは止めた絵にする（何体並んでも待機中に描き直さない）。「視差効果を減らす」がオンなら、乗せても動かさない。
 
+## 見た目のカスタマイズ（ROADMAP 5-8、F5-8）
+- キャラを右クリック →「見た目」で選ぶ。選ぶとすぐ一覧と編集画面の見出しのキャラに反映する。「元に戻す」で既定に戻す。
+- 体の色は `color` のまま（定義ファイルで決める）。それ以外はアプリ側の設定で、定義ファイルには書かない（リポジトリで共有される定義を汚さないため）。
+- 保存先は `~/Library/Application Support/NotchAgent/agent-looks.json`（`{"version": 1, "looks": {"<定義ファイルのパス>": {...}}}`、0600）。既定の見た目は記録しない。知らない値は既定として読む。
+- 目: まる（既定、半径 5）、つぶら（3.5）、きらきら（7、白いハイライト）、たまご（横 4 × 縦 6.5）、ねむそう（横 5.5 × 縦 2.4、少し下げる）。**待機中の目だけ**を変え、作業中・承認待ち・完了・エラーの表情は共通のまま（状態が見分けられるように）。まばたきは縦だけ細くする。
+- 体形: 体の底（70, 88）を支点に伸び縮みさせる。ふつう 1 × 1、のっぽ 0.82 × 1.06、ずんぐり 1.14 × 0.86、ちび 0.84 × 0.84。目の位置は体と一緒に動くが、大きさは変えない（`CharacterGeometry`）。
+- 小物: 双葉・アンテナ・とんがり帽子は頭のてっぺん、リボンは右上、めがねは目の周り。小物は目の追従では動かさない。てっぺんより上は `Accessory.headroom`（最大 17）までに収め、どの体形でも viewBox からはみ出さないようにする。
+- ノッチのキャラ（白）は変えない。
+
 ## 実装メモ
-- 色は `Sources/AgentKit/Agents/AgentAppearance.swift`、一覧は `App/Sources/Agents/AgentListView.swift`。
+- 色は `Sources/AgentKit/Agents/AgentAppearance.swift`、見た目の選択肢と保存は `Sources/AgentKit/Agents/AgentLook.swift`、一覧は `App/Sources/Agents/AgentListView.swift`。
 - 絵は `CharacterCanvas` に `CharacterPalette` を渡して描く（ノッチは `CharacterSpec.notchPalette`）。

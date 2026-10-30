@@ -68,6 +68,13 @@ final class NotchModel {
     /// 「戻る」・Esc（保存せずに一覧へ戻る）。
     @ObservationIgnored var onCloseAgentEdit: (() -> Void)?
 
+    /// サブエージェントのキャラの見た目（定義ファイルのパスごと、ROADMAP 5-8）。変更は `AgentLookStore` だけが行う。
+    var agentLooks = AgentLookLibrary()
+    /// 見た目のファイルを読めなかった・書けなかったときの説明。
+    var agentLookError: String?
+    /// 一覧の右クリックで見た目を選んだとき（`AgentLookStore.set`）。
+    @ObservationIgnored var onSetAgentLook: ((_ path: String, _ look: AgentLook) -> Void)?
+
     // MARK: - タスク（ROADMAP 3-3）
 
     /// アプリから始めたタスク（新しい順）。変更は `TaskRunner` だけが行う。

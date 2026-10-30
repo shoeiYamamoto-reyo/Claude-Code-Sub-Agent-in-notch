@@ -9,6 +9,8 @@ import SwiftUI
 struct AgentEditorView: View {
     /// 入力内容はセッションに置く（ノッチが縮んでビューが消えても残す）。
     @Bindable var session: AgentEditSession
+    /// 一覧で選んだ見た目（ROADMAP 5-8）。見出しのキャラに使う。
+    let look: AgentLook
     let plan: (AgentDefinition) -> AgentSavePlan?
     /// 書き込めなければ理由を返す。
     let onSave: (SettingsFileEdit) -> String?
@@ -39,7 +41,7 @@ struct AgentEditorView: View {
             }
             .buttonStyle(CardButtonStyle(tint: .white))
             .help("保存せずに一覧へ戻る（Esc）")
-            AgentCharacter(palette: AgentAppearance.palette(color: session.color), mood: .idle, animated: false)
+            AgentCharacter(palette: AgentAppearance.palette(color: session.color), mood: .idle, animated: false, look: look)
                 .frame(width: 34, height: 24)
             Text(session.title)
                 .font(.headline)
