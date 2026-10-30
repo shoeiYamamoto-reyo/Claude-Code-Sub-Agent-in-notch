@@ -82,6 +82,10 @@ final class NotchModel {
     @ObservationIgnored var onShowTask: ((UUID) -> Void)?
     /// 終わったタスクに追加の指示を渡して続ける。続けられなければ理由を返す（`TaskRunner.continueTask`、ROADMAP 3-6）。
     @ObservationIgnored var onContinueTask: ((_ id: UUID, _ prompt: String) -> String?)?
+    /// 終わったタスクをターミナルで開いて続ける。開けなければ理由を返す（`TaskRunner.openInTerminal`、ROADMAP 5-6）。
+    @ObservationIgnored var onOpenTaskInTerminal: ((UUID) -> String?)?
+    /// タスクの worktree を消す。消せなければ理由を返す（`TaskRunner.removeWorktree`）。
+    @ObservationIgnored var onRemoveWorktree: (@MainActor (UUID) async -> String?)?
 
     // MARK: - 履歴（ROADMAP 5-4）
 
@@ -119,8 +123,15 @@ final class NotchModel {
     @ObservationIgnored var onBeginQuickInput: (() -> Void)?
     /// Esc・開始したあと（`NotchPanelController.endQuickInput`）。
     @ObservationIgnored var onEndQuickInput: (() -> Void)?
-    /// 「開始」。始められなければ理由を返す（`TaskLauncher.start`）。
-    @ObservationIgnored var onQuickStart: ((_ projectID: Project.ID, _ agent: String?, _ prompt: String) -> String?)?
+    /// 「開始」。始められなければ理由を返す（`TaskLauncher.start`）。`separate` なら git worktree で分けて動かす。
+    @ObservationIgnored var onQuickStart: (@MainActor (_ projectID: Project.ID, _ agent: String?, _ prompt: String, _ separate: Bool) async -> String?)?
+
+    /// このプロジェクトのフォルダで、ほかのタスクかセッションが動いているか（worktree で分けるかの既定、ROADMAP 5-6）。
+    func isProjectBusy(_ project: Project) -> Bool {
+        let directories = tasks.filter(\.isActive).map { $0.workingDirectory ?? projects.project(id: $0.projectID)?.directory ?? "" }
+            + sessions.filter(\.isActive).compactMap(\.cwd)
+        return GitWorktree.isBusy(projectDirectory: project.directory, busyDirectories: directories.filter { !$0.isEmpty })
+    }
 }
 
 enum ReceiverStatus: Equatable {

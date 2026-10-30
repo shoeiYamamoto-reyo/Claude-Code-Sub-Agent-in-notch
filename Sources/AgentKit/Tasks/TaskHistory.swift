@@ -43,6 +43,11 @@ public struct TaskHistoryEntry: Codable, Sendable, Equatable, Identifiable {
     public var filesChanged: Int
     public var linesAdded: Int
     public var linesRemoved: Int
+    /// 動かしたフォルダ。プロジェクトのフォルダなら nil（ROADMAP 5-6）。
+    public var workingDirectory: String?
+    /// worktree で分けたときの場所とブランチ。
+    public var worktreePath: String?
+    public var worktreeBranch: String?
 
     public init(
         id: UUID,
@@ -59,7 +64,10 @@ public struct TaskHistoryEntry: Codable, Sendable, Equatable, Identifiable {
         costUSD: Double? = nil,
         filesChanged: Int = 0,
         linesAdded: Int = 0,
-        linesRemoved: Int = 0
+        linesRemoved: Int = 0,
+        workingDirectory: String? = nil,
+        worktreePath: String? = nil,
+        worktreeBranch: String? = nil
     ) {
         self.id = id
         self.projectID = projectID
@@ -76,6 +84,9 @@ public struct TaskHistoryEntry: Codable, Sendable, Equatable, Identifiable {
         self.filesChanged = filesChanged
         self.linesAdded = linesAdded
         self.linesRemoved = linesRemoved
+        self.workingDirectory = workingDirectory
+        self.worktreePath = worktreePath
+        self.worktreeBranch = worktreeBranch
     }
 }
 
@@ -196,6 +207,12 @@ public struct TaskHistory: Sendable, Equatable {
 
     public mutating func removeAll() {
         entries.removeAll()
+    }
+
+    /// worktree を消した。続けるときはもう使えないので、場所の記録も消す。
+    public mutating func worktreeRemoved(id: UUID) {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        entries[index].worktreePath = nil
     }
 
     /// `agent` を指定したタスクの利用回数。`projectIDs` を渡すとそのプロジェクトのタスクだけを数える。

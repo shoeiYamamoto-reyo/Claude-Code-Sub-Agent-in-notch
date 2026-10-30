@@ -136,6 +136,10 @@ public enum ClaudeLocator {                      // 設定値 → ログイン�
 
 // M5-5 で実装。PromptTemplate（name, prompt, agent?, projectID?）と PromptTemplateLibrary（名前順、名前の重なりは不可、
 // available(for:) でそのプロジェクトで使えるもの）。保存は PromptTemplateFile（templates.json、0600、{"version": 1, "templates": [...]}）。
+
+// M5-6 で実装。TerminalLaunch.resumeArguments / script で「ターミナルで続ける」の .command ファイル（ShellQuote でクォート）。
+// GitWorktree.isBusy（動いているフォルダがプロジェクトの中にあるか）/ plan / create / remove（git を Process で実行）。
+// TaskRequest.directory と TaskHistoryEntry.workingDirectory / worktreePath / worktreeBranch で、続きも同じ worktree で動かす。
 public struct TaskTranscript: Sendable, Equatable {
     public mutating func consume(_ line: some StringProtocol)
     public var lastAssistantText: String? { get }   // メインの会話だけ（サブエージェントの応答は含めない）

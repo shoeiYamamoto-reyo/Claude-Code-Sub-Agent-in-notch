@@ -10,13 +10,23 @@ public struct TaskRequest: Sendable, Equatable {
     public var sessionID: UUID
     /// 前に始めたセッション `sessionID` の続きにするか（`--resume`、ROADMAP 3-6、F2-4）。
     public var resume: Bool
+    /// 動かすフォルダ。nil ならプロジェクトのフォルダ（worktree で分けたときはその中、ROADMAP 5-6）。
+    public var directory: String?
 
-    public init(projectID: UUID, agent: String?, prompt: String, sessionID: UUID = UUID(), resume: Bool = false) {
+    public init(
+        projectID: UUID,
+        agent: String?,
+        prompt: String,
+        sessionID: UUID = UUID(),
+        resume: Bool = false,
+        directory: String? = nil
+    ) {
         self.projectID = projectID
         self.agent = agent
         self.prompt = prompt
         self.sessionID = sessionID
         self.resume = resume
+        self.directory = directory
     }
 }
 
