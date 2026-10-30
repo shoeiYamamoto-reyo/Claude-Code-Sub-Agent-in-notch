@@ -40,7 +40,7 @@ final class NotchPanelController {
     }
 
     func start() {
-        let hostingView = FirstMouseHostingView(rootView: NotchRootView(model: model))
+        let hostingView = FirstMouseHostingView(rootView: NotchRootView(model: model, sound: sound))
         hostingView.sizingOptions = []
         hostingView.addTrackingArea(NSTrackingArea(
             rect: .zero,

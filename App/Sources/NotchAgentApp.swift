@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = taskLauncher
         _ = taskResultViewer
         model.onInstallHooks = { [weak self] in self?.hookSetup.beginInstall() }
+        model.onOpenSettings = { SettingsOpener.open() }
         model.onBeginQuickInput = { [weak self] in self?.controller.beginQuickInput() }
         model.onEndQuickInput = { [weak self] in self?.controller.endQuickInput(collapse: true) }
         agentEditor.onBegin = { [weak self] in self?.controller.beginAgentEditing() }

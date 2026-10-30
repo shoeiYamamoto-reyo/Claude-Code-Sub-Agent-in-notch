@@ -126,7 +126,7 @@ private struct SoundSettingsView: View {
                 }
             }
             Section {
-                Text("おやすみモード（一時的に音を止める）はメニューバーのメニューから使えます。")
+                Text("おやすみモード（一時的に音を止める）はメニューバーのメニューと、展開したノッチの月のボタン（1 時間）から使えます。")
                     .foregroundStyle(.secondary)
             }
         }
