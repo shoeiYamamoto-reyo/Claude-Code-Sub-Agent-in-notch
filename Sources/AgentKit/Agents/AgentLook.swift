@@ -45,7 +45,8 @@ public struct AgentLook: Codable, Sendable, Equatable {
         public var scale: (x: CGFloat, y: CGFloat) {
             switch self {
             case .standard: (1, 1)
-            case .tall: (0.86, 1.14)
+            // 頭の上に小物（`Accessory.headroom`）を載せる余白を残す。
+            case .tall: (0.82, 1.06)
             case .wide: (1.14, 0.86)
             case .small: (0.84, 0.84)
             }
@@ -68,6 +69,18 @@ public struct AgentLook: Codable, Sendable, Equatable {
             case .ribbon: "リボン"
             case .hat: "とんがり帽子"
             case .glasses: "めがね"
+            }
+        }
+
+        /// 頭のてっぺん（`CharacterGeometry.top`）からどれだけ上にはみ出して描くか（viewBox 単位）。
+        /// どの体形でも viewBox の中に収まるよう、描く側（`CharacterAccessory`）はこの高さを超えない。
+        public var headroom: CGFloat {
+            switch self {
+            case .none, .glasses: 0
+            case .ribbon: 2
+            case .sprout: 15
+            case .antenna: 15
+            case .hat: 17
             }
         }
     }

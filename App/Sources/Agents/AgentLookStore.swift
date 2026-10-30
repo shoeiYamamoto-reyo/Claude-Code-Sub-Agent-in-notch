@@ -37,6 +37,8 @@ final class AgentLookStore {
         guard canSave else { return }
         do {
             try AgentLookFile.save(model.agentLooks, to: filePath)
+            // 前に保存できなかったときの知らせを消す（読めなかったときは canSave が false なのでここに来ない）。
+            model.agentLookError = nil
         } catch {
             model.agentLookError = "キャラの見た目を保存できませんでした: \(error.localizedDescription)"
         }

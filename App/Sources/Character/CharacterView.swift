@@ -201,6 +201,7 @@ struct CharacterCanvas: View {
 }
 
 /// サブエージェントの小物（ROADMAP 5-8）。頭のてっぺん（`CharacterGeometry.top`）か目の位置に合わせて描く。
+/// てっぺんより上は `AgentLook.Accessory.headroom` の高さまでに収める（のっぽでも viewBox からはみ出さない）。
 enum CharacterAccessory {
     static func draw(_ accessory: AgentLook.Accessory, geometry: CharacterGeometry, in context: inout GraphicsContext) {
         let top = geometry.top
@@ -224,12 +225,12 @@ enum CharacterAccessory {
             }
 
         case .antenna:
-            let ball = CGPoint(x: top.x + 5, y: top.y - 13)
+            let ball = CGPoint(x: top.x + 5, y: top.y - 11.5)
             var line = Path()
             line.move(to: CGPoint(x: top.x, y: top.y + 1))
             line.addLine(to: ball)
             context.stroke(line, with: ink, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-            context.fill(Path(ellipseIn: CGRect(x: ball.x - 3.4, y: ball.y - 3.4, width: 6.8, height: 6.8)), with: .color(Color(hex: 0xF6C453)))
+            context.fill(Path(ellipseIn: CGRect(x: ball.x - 3.2, y: ball.y - 3.2, width: 6.4, height: 6.4)), with: .color(Color(hex: 0xF6C453)))
 
         case .ribbon:
             // 頭の右上に結ぶ。
@@ -246,14 +247,14 @@ enum CharacterAccessory {
             context.fill(Path(ellipseIn: CGRect(x: knot.x - 2.8, y: knot.y - 2.8, width: 5.6, height: 5.6)), with: .color(Color(hex: 0xC94F70)))
 
         case .hat:
-            let apex = CGPoint(x: top.x + 3, y: top.y - 19)
+            let apex = CGPoint(x: top.x + 3, y: top.y - 14.5)
             var cone = Path()
             cone.move(to: CGPoint(x: top.x - 11, y: top.y + 3))
             cone.addLine(to: apex)
             cone.addLine(to: CGPoint(x: top.x + 11, y: top.y + 3))
             cone.addQuadCurve(to: CGPoint(x: top.x - 11, y: top.y + 3), control: CGPoint(x: top.x, y: top.y + 6))
             context.fill(cone, with: .color(Color(hex: 0x9C8CF0)))
-            context.fill(Path(ellipseIn: CGRect(x: apex.x - 3, y: apex.y - 3, width: 6, height: 6)), with: .color(Color(hex: 0xF6C453)))
+            context.fill(Path(ellipseIn: CGRect(x: apex.x - 2.5, y: apex.y - 2.5, width: 5, height: 5)), with: .color(Color(hex: 0xF6C453)))
 
         case .glasses:
             let style = StrokeStyle(lineWidth: 2, lineCap: .round)

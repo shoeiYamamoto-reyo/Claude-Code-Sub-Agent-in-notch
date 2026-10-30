@@ -16,7 +16,7 @@ final class AgentLookTests: XCTestCase {
     func testShapesScaleFromTheBottomAndStayInsideTheViewBox() {
         let tall = CharacterGeometry(shape: .tall)
         // 底は動かず、てっぺんは上がる。
-        XCTAssertEqual(tall.bodySegments[3], .line(to: CGPoint(x: 70 + (32 - 70) * 0.86, y: 88)))
+        XCTAssertEqual(tall.bodySegments[3], .line(to: CGPoint(x: 70 + (32 - 70) * 0.82, y: 88)))
         XCTAssertLessThan(tall.top.y, 22)
         XCTAssertLessThan(tall.leftEye.y, CharacterSpec.leftEye.y)
         // 目の間は細くなる。
@@ -31,9 +31,12 @@ final class AgentLookTests: XCTestCase {
                 }
                 for point in points {
                     XCTAssertTrue((0...CharacterSpec.viewBoxWidth).contains(point.x), "\(shape) \(point)")
-                    // 小物を載せる余白を残す。
-                    XCTAssertTrue((8...CharacterSpec.viewBoxHeight).contains(point.y), "\(shape) \(point)")
+                    XCTAssertTrue((0...CharacterSpec.viewBoxHeight).contains(point.y), "\(shape) \(point)")
                 }
+            }
+            // どの小物を載せても上にはみ出さない。
+            for accessory in AgentLook.Accessory.allCases {
+                XCTAssertGreaterThanOrEqual(geometry.top.y - accessory.headroom, 0, "\(shape) \(accessory)")
             }
         }
     }
