@@ -16,3 +16,6 @@ xcuserdata/
 
 # XcodeGen が project.yml の info から生成する
 App/Info.plist
+
+# ノッチから並行して始めたタスクの git worktree（ROADMAP 5-6、GitWorktree）
+.claude/worktrees/
