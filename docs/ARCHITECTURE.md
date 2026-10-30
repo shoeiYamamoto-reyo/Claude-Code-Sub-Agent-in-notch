@@ -140,6 +140,9 @@ public enum ClaudeLocator {                      // 設定値 → ログイン�
 // M5-6 で実装。TerminalLaunch.resumeArguments / script で「ターミナルで続ける」の .command ファイル（ShellQuote でクォート）。
 // GitWorktree.isBusy（動いているフォルダがプロジェクトの中にあるか）/ plan / create / remove（git を Process で実行）。
 // TaskRequest.directory と TaskHistoryEntry.workingDirectory / worktreePath / worktreeBranch で、続きも同じ worktree で動かす。
+
+// M5-8 で実装。AgentLook（目・体形・小物）と CharacterGeometry（体形ごとの輪郭・目・陰・頭のてっぺん）。
+// AgentLookLibrary は定義ファイルのパスごとの見た目（既定は記録しない）。保存は AgentLookFile（agent-looks.json、0600、{"version": 1, "looks": {...}}）。
 public struct TaskTranscript: Sendable, Equatable {
     public mutating func consume(_ line: some StringProtocol)
     public var lastAssistantText: String? { get }   // メインの会話だけ（サブエージェントの応答は含めない）

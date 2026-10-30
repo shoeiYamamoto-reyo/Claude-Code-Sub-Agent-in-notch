@@ -82,6 +82,7 @@ private struct IslandContent: View {
                     // 定義の編集はノッチの中で完結させる（ROADMAP 4-4）。承認カードは上に出したまま、編集内容は残す。
                     AgentEditorView(
                         session: session,
+                        look: session.existingPath.map { model.agentLooks.look(for: $0) } ?? .standard,
                         plan: { model.onPlanAgentSave?($0) },
                         onSave: { model.onSaveAgent?($0) },
                         onClose: { model.onCloseAgentEdit?() }
@@ -137,9 +138,12 @@ private struct IslandContent: View {
             AgentListView(
                 overview: model.agentOverview,
                 history: model.taskHistory,
+                looks: model.agentLooks,
+                lookError: model.agentLookError,
                 onRefresh: { model.onRefreshAgents?() },
                 onEdit: { model.onEditAgent?($0, $1) },
-                onNew: { model.onNewAgent?($0, $1) }
+                onNew: { model.onNewAgent?($0, $1) },
+                onSetLook: { model.onSetAgentLook?($0, $1) }
             )
             // 登録・編集・削除したプロジェクトの定義を出し直す。
             .onChange(of: model.projects) { model.onRefreshAgents?() }

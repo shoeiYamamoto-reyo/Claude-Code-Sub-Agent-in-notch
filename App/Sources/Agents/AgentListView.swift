@@ -6,14 +6,19 @@ import SwiftUI
 /// サブエージェントをノッチと同じ形のキャラにして、ユーザー共通と登録プロジェクトごとに並べる。
 /// 体の色は frontmatter の `color`。マウスを乗せると上の欄に詳細を出し、押すと編集、最後の「＋」で新規作成
 /// （F5-2 / F5-3、`AgentEditor`）。詳細にはタスクの履歴から数えた利用回数も出す（F5-6、ROADMAP 5-4）。
+/// 右クリックの「見た目」で目の形・体形・小物を選べる（F5-8、ROADMAP 5-8。アプリ側に保存する）。
 struct AgentListView: View {
     let overview: AgentOverview?
     let history: TaskHistory
+    let looks: AgentLookLibrary
+    let lookError: String?
     let onRefresh: () -> Void
     /// 定義ファイルのパスと、それを読んだ `.claude/agents` フォルダ。
     let onEdit: (String, String) -> Void
     /// 置く `.claude/agents` フォルダと、置き場所の名前。
     let onNew: (String, String) -> Void
+    /// 定義ファイルのパスと選んだ見た目。
+    let onSetLook: (String, AgentLook) -> Void
 
     /// マウスを乗せているキャラ。
     @State private var hovered: HoveredAgent?
@@ -28,6 +33,12 @@ struct AgentListView: View {
                     .buttonStyle(CardButtonStyle(tint: .white))
             }
             AgentDetail(entry: hovered?.entry, usage: hovered.flatMap { usageText($0) })
+            if let lookError {
+                Label(lookError, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+            }
             if let overview {
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: 10) {
@@ -38,7 +49,9 @@ struct AgentListView: View {
                             entries: overview.user,
                             emptyText: "定義はありません。",
                             hovered: $hovered,
+                            looks: looks,
                             onEdit: onEdit,
+                            onSetLook: onSetLook,
                             onNew: {
                                 onNew(AgentCatalog.userAgentDirectory(home: NSHomeDirectory()), "ユーザー共通")
                             }
@@ -51,7 +64,9 @@ struct AgentListView: View {
                                 entries: item.entries,
                                 emptyText: "このプロジェクトの定義はありません（ユーザー共通のものが使えます）。",
                                 hovered: $hovered,
+                                looks: looks,
                                 onEdit: onEdit,
+                                onSetLook: onSetLook,
                                 onNew: {
                                     let directories = AgentCatalog.projectAgentDirectories(
                                         for: item.project.directory, home: NSHomeDirectory()
@@ -164,7 +179,9 @@ private struct AgentSection: View {
     let entries: [AgentCatalog.Entry]
     let emptyText: String
     @Binding var hovered: HoveredAgent?
+    let looks: AgentLookLibrary
     let onEdit: (String, String) -> Void
+    let onSetLook: (String, AgentLook) -> Void
     let onNew: () -> Void
 
     private let columns = [GridItem(.adaptive(minimum: 74, maximum: 90), spacing: 4, alignment: .top)]
@@ -191,6 +208,7 @@ private struct AgentSection: View {
                     let item = HoveredAgent(entry: entry, projectID: projectID)
                     AgentTile(
                         entry: entry,
+                        look: looks.look(for: entry.path),
                         isHovered: hovered == item,
                         onHover: { inside in
                             if inside {
@@ -199,7 +217,8 @@ private struct AgentSection: View {
                                 hovered = nil
                             }
                         },
-                        onEdit: { onEdit(entry.path, entry.directory) }
+                        onEdit: { onEdit(entry.path, entry.directory) },
+                        onSetLook: { onSetLook(entry.path, $0) }
                     )
                 }
                 NewAgentTile(title: title, action: onNew)
@@ -211,16 +230,19 @@ private struct AgentSection: View {
 /// サブエージェント 1 体。普段は止めた絵で、マウスを乗せている間だけ左右に揺れる。
 private struct AgentTile: View {
     let entry: AgentCatalog.Entry
+    let look: AgentLook
     let isHovered: Bool
     let onHover: (Bool) -> Void
     let onEdit: () -> Void
+    let onSetLook: (AgentLook) -> Void
 
     var body: some View {
         VStack(spacing: 3) {
             AgentCharacter(
                 palette: AgentAppearance.palette(for: entry),
                 mood: entry.definition == nil ? .error : .idle,
-                animated: isHovered
+                animated: isHovered,
+                look: entry.definition == nil ? .standard : look
             )
             .frame(width: 56, height: 40)
             Text(name)
@@ -241,6 +263,7 @@ private struct AgentTile: View {
         .contextMenu {
             if entry.definition != nil {
                 Button("編集…", action: onEdit)
+                lookMenu
             }
             Button("Finder で表示") {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: entry.path)])
@@ -256,6 +279,35 @@ private struct AgentTile: View {
         entry.definition?.name ?? Self.fileName(entry.path)
     }
 
+    /// 見た目の選択。選ぶとすぐ一覧のキャラに反映し、アプリ側に保存する（定義ファイルは変えない）。
+    private var lookMenu: some View {
+        Menu("見た目") {
+            Picker("目", selection: lookBinding(\.eyes)) {
+                ForEach(AgentLook.Eyes.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Picker("体形", selection: lookBinding(\.shape)) {
+                ForEach(AgentLook.Shape.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Picker("小物", selection: lookBinding(\.accessory)) {
+                ForEach(AgentLook.Accessory.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            Divider()
+            Button("元に戻す") { onSetLook(.standard) }
+                .disabled(look == .standard)
+        }
+    }
+
+    private func lookBinding<Value>(_ keyPath: WritableKeyPath<AgentLook, Value>) -> Binding<Value> {
+        Binding(
+            get: { look[keyPath: keyPath] },
+            set: { value in
+                var updated = look
+                updated[keyPath: keyPath] = value
+                onSetLook(updated)
+            }
+        )
+    }
+
     static func fileName(_ path: String) -> String {
         (path as NSString).lastPathComponent
     }
@@ -267,6 +319,7 @@ struct AgentCharacter: View {
     let palette: CharacterPalette
     let mood: CharacterMood
     let animated: Bool
+    var look: AgentLook = .standard
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -281,7 +334,7 @@ struct AgentCharacter: View {
     }
 
     private func canvas(pose: CharacterPose) -> some View {
-        CharacterCanvas(mood: mood, eyeOffset: .zero, pose: pose, palette: palette)
+        CharacterCanvas(mood: mood, eyeOffset: .zero, pose: pose, palette: palette, look: look)
     }
 }
 

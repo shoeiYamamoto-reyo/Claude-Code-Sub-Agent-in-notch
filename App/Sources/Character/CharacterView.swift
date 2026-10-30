@@ -49,12 +49,13 @@ private struct CharacterSchedule: TimelineSchedule {
     }
 }
 
-/// 1 コマ分の絵。サブエージェントの一覧（`AgentListView`）では色を変えて使う。
+/// 1 コマ分の絵。サブエージェントの一覧（`AgentListView`）では色と見た目（`AgentLook`、ROADMAP 5-8）を変えて使う。
 struct CharacterCanvas: View {
     let mood: CharacterMood
     let eyeOffset: EyeOffset
     let pose: CharacterPose
     var palette: CharacterPalette = CharacterSpec.notchPalette
+    var look: AgentLook = .standard
 
     var body: some View {
         Canvas { context, size in
@@ -72,9 +73,10 @@ struct CharacterCanvas: View {
             context.scaleBy(x: pose.scaleX, y: pose.scaleY)
             context.translateBy(x: -anchor.x, y: -anchor.y)
 
-            context.fill(Self.bodyPath, with: .color(Color(hex: palette.body)))
+            let geometry = Self.geometries[look.shape] ?? .standard
+            context.fill(Self.bodyPaths[look.shape] ?? Self.bodyPath, with: .color(Color(hex: palette.body)))
             let shadow = CharacterSpec.shadowCenter
-            let radii = CharacterSpec.shadowRadii
+            let radii = geometry.shadowRadii
             context.fill(
                 Path(ellipseIn: CGRect(
                     x: shadow.x - radii.width,
@@ -85,25 +87,26 @@ struct CharacterCanvas: View {
                 with: .color(Color(hex: palette.shadow))
             )
 
+            // 小物は顔と一緒に動かす（目の追従では動かさない）。
+            CharacterAccessory.draw(look.accessory, geometry: geometry, in: &context)
+
             if mood == .idle {
                 context.translateBy(x: eyeOffset.dx, y: eyeOffset.dy)
             }
-            drawEyes(in: &context)
+            drawEyes(geometry: geometry, in: &context)
         }
         .accessibilityLabel("キャラクター（\(mood.displayName)）")
     }
 
-    private func drawEyes(in context: inout GraphicsContext) {
+    private func drawEyes(geometry: CharacterGeometry, in context: inout GraphicsContext) {
         let eyeColor = GraphicsContext.Shading.color(Color(hex: CharacterSpec.eyeColor))
         let stroke = StrokeStyle(lineWidth: CharacterSpec.eyeStrokeWidth, lineCap: .round, lineJoin: .round)
 
-        for (index, center) in [CharacterSpec.leftEye, CharacterSpec.rightEye].enumerated() {
+        for (index, center) in [geometry.leftEye, geometry.rightEye].enumerated() {
             let isLeft = index == 0
             switch mood {
             case .idle:
-                let r = CharacterSpec.idleEyeRadius
-                let ry = r * pose.eyeOpenness
-                context.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - ry, width: r * 2, height: ry * 2)), with: eyeColor)
+                drawIdleEye(at: center, color: eyeColor, in: &context)
 
             case .working:
                 let half = CharacterSpec.workingLineHalfWidth
@@ -141,9 +144,48 @@ struct CharacterCanvas: View {
         }
     }
 
-    nonisolated static let bodyPath: Path = {
+    /// 待機中の目。形は `AgentLook.Eyes`（ほかの状態の表情は変えない）。まばたきでは縦だけ細くする。
+    private func drawIdleEye(at center: CGPoint, color: GraphicsContext.Shading, in context: inout GraphicsContext) {
+        let open = pose.eyeOpenness
+        func ellipse(rx: CGFloat, ry: CGFloat, dy: CGFloat = 0) -> Path {
+            Path(ellipseIn: CGRect(x: center.x - rx, y: center.y + dy - ry, width: rx * 2, height: ry * 2))
+        }
+        switch look.eyes {
+        case .round:
+            let r = CharacterSpec.idleEyeRadius
+            context.fill(ellipse(rx: r, ry: r * open), with: color)
+        case .small:
+            context.fill(ellipse(rx: 3.5, ry: 3.5 * open), with: color)
+        case .big:
+            context.fill(ellipse(rx: 7, ry: 7 * open), with: color)
+            if open > 0.6 {
+                let h: CGFloat = 2.4
+                context.fill(
+                    Path(ellipseIn: CGRect(x: center.x + 2.2 - h, y: center.y - 2.2 - h, width: h * 2, height: h * 2)),
+                    with: .color(.white)
+                )
+            }
+        case .oval:
+            context.fill(ellipse(rx: 4, ry: 6.5 * open), with: color)
+        case .sleepy:
+            // 上まぶたが下がった、横長で細い目。
+            context.fill(ellipse(rx: 5.5, ry: 2.4 * open, dy: 1.5), with: color)
+        }
+    }
+
+    nonisolated static let geometries: [AgentLook.Shape: CharacterGeometry] = Dictionary(
+        uniqueKeysWithValues: AgentLook.Shape.allCases.map { ($0, CharacterGeometry(shape: $0)) }
+    )
+
+    /// 体形ごとの輪郭。
+    nonisolated static let bodyPaths: [AgentLook.Shape: Path] = geometries.mapValues { path(from: $0.bodySegments) }
+
+    /// ノッチのキャラ（ふつうの体形）の輪郭。
+    nonisolated static let bodyPath: Path = path(from: CharacterSpec.bodySegments)
+
+    nonisolated private static func path(from segments: [PathSegment]) -> Path {
         var path = Path()
-        for segment in CharacterSpec.bodySegments {
+        for segment in segments {
             switch segment {
             case .move(let point):
                 path.move(to: point)
@@ -155,7 +197,76 @@ struct CharacterCanvas: View {
         }
         path.closeSubpath()
         return path
-    }()
+    }
+}
+
+/// サブエージェントの小物（ROADMAP 5-8）。頭のてっぺん（`CharacterGeometry.top`）か目の位置に合わせて描く。
+enum CharacterAccessory {
+    static func draw(_ accessory: AgentLook.Accessory, geometry: CharacterGeometry, in context: inout GraphicsContext) {
+        let top = geometry.top
+        let ink = GraphicsContext.Shading.color(Color(hex: CharacterSpec.eyeColor))
+        switch accessory {
+        case .none:
+            break
+
+        case .sprout:
+            let tip = CGPoint(x: top.x, y: top.y - 8)
+            var stem = Path()
+            stem.move(to: CGPoint(x: top.x, y: top.y + 1))
+            stem.addLine(to: tip)
+            context.stroke(stem, with: .color(Color(hex: 0x5FA85F)), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+            for side in [-1.0, 1.0] as [CGFloat] {
+                var leaf = Path()
+                leaf.move(to: tip)
+                leaf.addQuadCurve(to: CGPoint(x: tip.x + 11 * side, y: tip.y - 5), control: CGPoint(x: tip.x + 7 * side, y: tip.y + 3))
+                leaf.addQuadCurve(to: tip, control: CGPoint(x: tip.x + 4 * side, y: tip.y - 8))
+                context.fill(leaf, with: .color(Color(hex: 0x7CC47C)))
+            }
+
+        case .antenna:
+            let ball = CGPoint(x: top.x + 5, y: top.y - 13)
+            var line = Path()
+            line.move(to: CGPoint(x: top.x, y: top.y + 1))
+            line.addLine(to: ball)
+            context.stroke(line, with: ink, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            context.fill(Path(ellipseIn: CGRect(x: ball.x - 3.4, y: ball.y - 3.4, width: 6.8, height: 6.8)), with: .color(Color(hex: 0xF6C453)))
+
+        case .ribbon:
+            // 頭の右上に結ぶ。
+            let knot = CGPoint(x: top.x + 17, y: top.y + 5)
+            let color = GraphicsContext.Shading.color(Color(hex: 0xE86A8A))
+            for side in [-1.0, 1.0] as [CGFloat] {
+                var wing = Path()
+                wing.move(to: knot)
+                wing.addLine(to: CGPoint(x: knot.x + 9 * side, y: knot.y - 6))
+                wing.addLine(to: CGPoint(x: knot.x + 9 * side, y: knot.y + 6))
+                wing.closeSubpath()
+                context.fill(wing, with: color)
+            }
+            context.fill(Path(ellipseIn: CGRect(x: knot.x - 2.8, y: knot.y - 2.8, width: 5.6, height: 5.6)), with: .color(Color(hex: 0xC94F70)))
+
+        case .hat:
+            let apex = CGPoint(x: top.x + 3, y: top.y - 19)
+            var cone = Path()
+            cone.move(to: CGPoint(x: top.x - 11, y: top.y + 3))
+            cone.addLine(to: apex)
+            cone.addLine(to: CGPoint(x: top.x + 11, y: top.y + 3))
+            cone.addQuadCurve(to: CGPoint(x: top.x - 11, y: top.y + 3), control: CGPoint(x: top.x, y: top.y + 6))
+            context.fill(cone, with: .color(Color(hex: 0x9C8CF0)))
+            context.fill(Path(ellipseIn: CGRect(x: apex.x - 3, y: apex.y - 3, width: 6, height: 6)), with: .color(Color(hex: 0xF6C453)))
+
+        case .glasses:
+            let style = StrokeStyle(lineWidth: 2, lineCap: .round)
+            let r: CGFloat = 8.5
+            for center in [geometry.leftEye, geometry.rightEye] {
+                context.stroke(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)), with: ink, style: style)
+            }
+            var bridge = Path()
+            bridge.move(to: CGPoint(x: geometry.leftEye.x + r, y: geometry.leftEye.y))
+            bridge.addLine(to: CGPoint(x: geometry.rightEye.x - r, y: geometry.rightEye.y))
+            context.stroke(bridge, with: ink, style: style)
+        }
+    }
 }
 
 extension Color {
