@@ -4,6 +4,7 @@ import SwiftUI
 /// パネル全体。上端中央に島を置き、キャラクターは状態にかかわらず同じ場所に描く。
 struct NotchRootView: View {
     let model: NotchModel
+    let sound: SoundPlayer
 
     var body: some View {
         if let layout = model.layout {
@@ -18,7 +19,7 @@ struct NotchRootView: View {
                 .fill(.black)
                 .frame(width: size.width, height: size.height)
                 .overlay(alignment: .top) {
-                    IslandContent(model: model, state: state, barHeight: layout.barHeight)
+                    IslandContent(model: model, sound: sound, state: state, barHeight: layout.barHeight)
                         .frame(width: size.width, height: size.height, alignment: .top)
                         .clipped()
                 }
@@ -44,6 +45,7 @@ struct NotchRootView: View {
 /// 島の中身。キャラクターの行（ノッチの高さ）より下に置く。
 private struct IslandContent: View {
     let model: NotchModel
+    let sound: SoundPlayer
     let state: NotchPresentationState
     let barHeight: CGFloat
     /// 縮んでも覚えておき、次に展開したときも同じタブを出す。
@@ -104,7 +106,7 @@ private struct IslandContent: View {
         if model.isQuickInputActive || (model.approvals.isEmpty && !model.projects.projects.isEmpty && model.projectLoadError == nil) {
             QuickTaskBar(model: model)
         }
-        ExpandedTabBar(selection: $tab)
+        ExpandedTabBar(selection: $tab, sound: sound, onOpenSettings: { model.onOpenSettings?() })
         switch tab {
         case .sessions:
             if !model.tasks.isEmpty {
@@ -175,8 +177,11 @@ enum ExpandedTab: CaseIterable {
 }
 
 /// 展開時のタブの切り替え。パネルはキー入力を受けないので、クリックだけで切り替える。
+/// 右端にはおやすみモードと設定のボタンを置く（ROADMAP 5-10。メニューバーのアイコンがノッチに隠れても届くように）。
 private struct ExpandedTabBar: View {
     @Binding var selection: ExpandedTab
+    let sound: SoundPlayer
+    let onOpenSettings: () -> Void
 
     var body: some View {
         HStack(spacing: 4) {
@@ -194,6 +199,41 @@ private struct ExpandedTabBar: View {
                 }
                 .buttonStyle(.plain)
             }
+            Spacer(minLength: 8)
+            quietButton
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 24, height: 20)
+                    .background(.white.opacity(0.1), in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("設定…")
         }
+    }
+
+    /// 押すたびに 1 時間のおやすみモードを始める・終える。ほかの長さはメニューバーのメニューから選ぶ。
+    private var quietButton: some View {
+        let quietUntil = sound.settings.isQuiet(at: .now) ? sound.settings.quietUntil : nil
+        return Button {
+            sound.update { $0.quietUntil = quietUntil == nil ? Date.now.addingTimeInterval(60 * 60) : nil }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: quietUntil == nil ? "moon" : "moon.fill")
+                if let quietUntil {
+                    Text(quietUntil.formatted(date: .omitted, time: .shortened))
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(quietUntil == nil ? .white.opacity(0.75) : .black)
+            .padding(.horizontal, 7)
+            .frame(minWidth: 24, minHeight: 20)
+            .background(quietUntil == nil ? AnyShapeStyle(.white.opacity(0.1)) : AnyShapeStyle(.yellow), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(quietUntil.map { "おやすみモードを終える（\($0.formatted(date: .omitted, time: .shortened)) まで）" } ?? "おやすみモード（1 時間、音を止める）")
     }
 }

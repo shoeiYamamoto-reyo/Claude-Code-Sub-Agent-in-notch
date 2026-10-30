@@ -30,6 +30,8 @@ final class NotchModel {
     @ObservationIgnored var onApprovalReply: ((_ requestID: Int, _ reply: HookReply) -> Void)?
     /// ノッチの「hooks をインストール…」ボタン（`HookSetup.beginInstall`）。メニューバーのアイコンがノッチに隠れる画面向け。
     @ObservationIgnored var onInstallHooks: (() -> Void)?
+    /// ノッチの「設定」ボタン（`SettingsOpener.open`、ROADMAP 5-10）。
+    @ObservationIgnored var onOpenSettings: (() -> Void)?
     /// 受信した hook をファイルに記録しているか（開発用）。
     var isCapturingEvents = false
 
