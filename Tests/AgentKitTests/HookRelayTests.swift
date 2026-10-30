@@ -102,6 +102,10 @@ final class HookRelayTests: XCTestCase {
         XCTAssertTrue(UnixSocketClient.send(withoutNewline, to: socketPath, timeoutMilliseconds: 300))
 
         wait(for: [expectation], timeout: 3)
+        // 落ちたときに、どの接続が届かなかったかを残す（ROADMAP 5-11）。
+        let sessions = Set(received.values.compactMap { $0.hook["session_id"]?.stringValue })
+        let expected = Set((0..<9).map { "s\($0)" } + ["last"])
+        XCTAssertEqual(sessions, expected, "届かなかった: \(expected.subtracting(sessions).sorted())")
         XCTAssertEqual(received.values.count, 10)
     }
 
@@ -128,11 +132,25 @@ final class HookRelayTests: XCTestCase {
     }
 
     /// 実行ファイルそのもの: アプリが無くても何も出力せず exit 0 で終わる。
+    ///
+    /// ビルドした直後の実行ファイルは、macOS が初回の起動時に検査する（数秒かかることがある）。
+    /// その時間は Claude Code から毎回呼ばれるときには掛からないので、1 回目は結果だけ確かめ、時間は 2 回目で測る（ROADMAP 5-11）。
     func testExecutableExitsSilentlyWithoutApp() throws {
         let binary = productsDirectory.appendingPathComponent("notch-hook")
         guard FileManager.default.isExecutableFile(atPath: binary.path) else {
             throw XCTSkip("notch-hook がビルドされていない: \(binary.path)")
         }
+        for attempt in 1...2 {
+            let elapsed = try runSilently(binary)
+            if attempt == 2 {
+                // プロセスの起動時間を含むので余裕を持たせる（関数単体の 100 ms は上のテストで見る）。
+                XCTAssertLessThan(elapsed, .seconds(1))
+            }
+        }
+    }
+
+    /// `notch-hook` に Stop の入力を渡して実行し、何も出力せず exit 0 で終わることを確かめる。かかった時間を返す。
+    private func runSilently(_ binary: URL) throws -> Duration {
         let process = Process()
         process.executableURL = binary
         process.environment = ["NOTCH_AGENT_SOCKET": socketPath, "HOME": NSTemporaryDirectory()]
@@ -152,8 +170,7 @@ final class HookRelayTests: XCTestCase {
         XCTAssertEqual(process.terminationStatus, 0)
         XCTAssertEqual(stdout.fileHandleForReading.readDataToEndOfFile(), Data())
         XCTAssertEqual(stderr.fileHandleForReading.readDataToEndOfFile(), Data())
-        // プロセスの起動時間を含むので余裕を持たせる（関数単体の 100 ms は上のテストで見る）。
-        XCTAssertLessThan(elapsed, .seconds(1))
+        return elapsed
     }
 
     private var productsDirectory: URL {
