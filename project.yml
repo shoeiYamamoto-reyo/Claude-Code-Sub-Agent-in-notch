@@ -26,6 +26,8 @@ targets:
     platform: macOS
     sources:
       - path: App/Sources
+      # アプリのアイコン（docs/design/app-icon/）。
+      - path: App/Resources
     dependencies:
       - package: AgentKit
         product: AgentKit
@@ -51,6 +53,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.notchagent.NotchAgent
         PRODUCT_NAME: NotchAgent
         GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   # 中継 CLI（Swift Package の notch-hook と同じソース）。アプリに同梱するために Xcode のターゲットにもする。
   notch-hook:
