@@ -211,54 +211,56 @@ enum CharacterAccessory {
             break
 
         case .sprout:
-            let tip = CGPoint(x: top.x, y: top.y - 8)
+            let tip = CGPoint(x: top.x, y: top.y - 9)
             var stem = Path()
-            stem.move(to: CGPoint(x: top.x, y: top.y + 1))
+            stem.move(to: CGPoint(x: top.x, y: top.y + 2))
             stem.addLine(to: tip)
-            context.stroke(stem, with: .color(Color(hex: 0x5FA85F)), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+            context.stroke(stem, with: .color(Color(hex: 0x5FA85F)), style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
             for side in [-1.0, 1.0] as [CGFloat] {
                 var leaf = Path()
                 leaf.move(to: tip)
-                leaf.addQuadCurve(to: CGPoint(x: tip.x + 11 * side, y: tip.y - 5), control: CGPoint(x: tip.x + 7 * side, y: tip.y + 3))
-                leaf.addQuadCurve(to: tip, control: CGPoint(x: tip.x + 4 * side, y: tip.y - 8))
+                leaf.addQuadCurve(to: CGPoint(x: tip.x + 16 * side, y: tip.y - 5), control: CGPoint(x: tip.x + 10 * side, y: tip.y + 5))
+                leaf.addQuadCurve(to: tip, control: CGPoint(x: tip.x + 6 * side, y: tip.y - 11))
                 context.fill(leaf, with: .color(Color(hex: 0x7CC47C)))
             }
 
         case .antenna:
-            let ball = CGPoint(x: top.x + 5, y: top.y - 11.5)
+            let ball = CGPoint(x: top.x + 6, y: top.y - 13)
             var line = Path()
-            line.move(to: CGPoint(x: top.x, y: top.y + 1))
+            line.move(to: CGPoint(x: top.x, y: top.y + 2))
             line.addLine(to: ball)
-            context.stroke(line, with: ink, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-            context.fill(Path(ellipseIn: CGRect(x: ball.x - 3.2, y: ball.y - 3.2, width: 6.4, height: 6.4)), with: .color(Color(hex: 0xF6C453)))
+            context.stroke(line, with: ink, style: StrokeStyle(lineWidth: 2.8, lineCap: .round))
+            context.fill(Path(ellipseIn: CGRect(x: ball.x - 4.6, y: ball.y - 4.6, width: 9.2, height: 9.2)), with: .color(Color(hex: 0xF6C453)))
 
         case .ribbon:
             // 頭の右上に結ぶ。
-            let knot = CGPoint(x: top.x + 17, y: top.y + 5)
+            let knot = CGPoint(x: top.x + 18, y: top.y + 7)
             let color = GraphicsContext.Shading.color(Color(hex: 0xE86A8A))
             for side in [-1.0, 1.0] as [CGFloat] {
                 var wing = Path()
                 wing.move(to: knot)
-                wing.addLine(to: CGPoint(x: knot.x + 9 * side, y: knot.y - 6))
-                wing.addLine(to: CGPoint(x: knot.x + 9 * side, y: knot.y + 6))
+                wing.addLine(to: CGPoint(x: knot.x + 13 * side, y: knot.y - 9))
+                wing.addLine(to: CGPoint(x: knot.x + 13 * side, y: knot.y + 9))
                 wing.closeSubpath()
                 context.fill(wing, with: color)
             }
-            context.fill(Path(ellipseIn: CGRect(x: knot.x - 2.8, y: knot.y - 2.8, width: 5.6, height: 5.6)), with: .color(Color(hex: 0xC94F70)))
+            context.fill(Path(ellipseIn: CGRect(x: knot.x - 3.8, y: knot.y - 3.8, width: 7.6, height: 7.6)), with: .color(Color(hex: 0xC94F70)))
 
         case .hat:
-            let apex = CGPoint(x: top.x + 3, y: top.y - 14.5)
+            // つばを頭に少しかぶせ、上へのはみ出しは headroom（18）に収める。
+            let apex = CGPoint(x: top.x + 3, y: top.y - 15)
             var cone = Path()
-            cone.move(to: CGPoint(x: top.x - 11, y: top.y + 3))
+            cone.move(to: CGPoint(x: top.x - 16, y: top.y + 7))
             cone.addLine(to: apex)
-            cone.addLine(to: CGPoint(x: top.x + 11, y: top.y + 3))
-            cone.addQuadCurve(to: CGPoint(x: top.x - 11, y: top.y + 3), control: CGPoint(x: top.x, y: top.y + 6))
+            cone.addLine(to: CGPoint(x: top.x + 16, y: top.y + 7))
+            cone.addQuadCurve(to: CGPoint(x: top.x - 16, y: top.y + 7), control: CGPoint(x: top.x, y: top.y + 11))
             context.fill(cone, with: .color(Color(hex: 0x9C8CF0)))
-            context.fill(Path(ellipseIn: CGRect(x: apex.x - 2.5, y: apex.y - 2.5, width: 5, height: 5)), with: .color(Color(hex: 0xF6C453)))
+            context.fill(Path(ellipseIn: CGRect(x: apex.x - 3, y: apex.y - 3, width: 6, height: 6)), with: .color(Color(hex: 0xF6C453)))
 
         case .glasses:
-            let style = StrokeStyle(lineWidth: 2, lineCap: .round)
-            let r: CGFloat = 8.5
+            let style = StrokeStyle(lineWidth: 2.8, lineCap: .round)
+            // のっぽ・ちびでも左右のレンズが重ならない大きさ（目の間は最小で約 23）。
+            let r: CGFloat = 10
             for center in [geometry.leftEye, geometry.rightEye] {
                 context.stroke(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)), with: ink, style: style)
             }

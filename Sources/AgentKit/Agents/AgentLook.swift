@@ -78,9 +78,9 @@ public struct AgentLook: Codable, Sendable, Equatable {
             switch self {
             case .none, .glasses: 0
             case .ribbon: 2
-            case .sprout: 15
-            case .antenna: 15
-            case .hat: 17
+            case .sprout: 17
+            case .antenna: 18
+            case .hat: 18
             }
         }
     }
