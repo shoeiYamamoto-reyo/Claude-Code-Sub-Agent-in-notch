@@ -125,12 +125,40 @@ private struct SoundSettingsView: View {
                     }
                 }
             }
+            Section("集中モード") {
+                Toggle("macOS の集中モード中は音を鳴らさない", isOn: binding(\.followsSystemFocus))
+                    .disabled(!settings.isEnabled)
+                if settings.followsSystemFocus {
+                    focusAccess
+                }
+            }
             Section {
-                Text("おやすみモード（一時的に音を止める）はメニューバーのメニューと、展開したノッチの月のボタン（1 時間）から使えます。")
+                Text("おやすみモード（一時的に音を止める）はメニューバーのメニューと、展開したノッチの月のボタン（1 時間）から使えます。どちらも表示は止めません。")
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .onAppear { sound.focus.refresh() }
+    }
+
+    /// 集中モードの状態を読む許可（ROADMAP 5-7）。
+    @ViewBuilder
+    private var focusAccess: some View {
+        switch sound.focus.access {
+        case .authorized:
+            Label("集中モードの状態を読めます。", systemImage: "checkmark.circle")
+                .foregroundStyle(.secondary)
+        case .notDetermined:
+            LabeledContent("集中モードの状態を読む許可が必要です。") {
+                Button("許可…") { sound.focus.requestAccess() }
+            }
+        case .denied:
+            Text("許可されていません。システム設定 › プライバシーとセキュリティ › 集中モード で Notch Agent をオンにしてください。")
+                .foregroundStyle(.secondary)
+        case .restricted:
+            Text("このビルドでは集中モードの状態を読めません（署名したビルドで使えます）。")
+                .foregroundStyle(.secondary)
+        }
     }
 
     private func binding<Value>(_ keyPath: WritableKeyPath<SoundSettings, Value>) -> Binding<Value> {

@@ -82,6 +82,22 @@ final class SoundGateTests: XCTestCase {
         XCTAssertTrue(gate.shouldPlay(.approval, settings: settings, systemInterfaceSoundsEnabled: true, at: at(60)))
     }
 
+    func testSystemFocusSilencesUnlessTurnedOff() throws {
+        var gate = SoundGate()
+        XCTAssertFalse(gate.shouldPlay(.approval, settings: SoundSettings(), systemInterfaceSoundsEnabled: true, systemFocused: true, at: at(0)))
+        XCTAssertTrue(gate.shouldPlay(.approval, settings: SoundSettings(), systemInterfaceSoundsEnabled: true, systemFocused: false, at: at(0)))
+        let ignoresFocus = SoundSettings(followsSystemFocus: false)
+        XCTAssertTrue(gate.shouldPlay(.finished, settings: ignoresFocus, systemInterfaceSoundsEnabled: true, systemFocused: true, at: at(0)))
+
+        // 前のバージョンで保存した設定（followsSystemFocus が無い）も読めて、既定はオン。
+        let old = #"{"isEnabled": false, "volume": "high", "playsInterfaceSounds": true, "playsAlertSounds": false}"#
+        let decoded = try JSONDecoder().decode(SoundSettings.self, from: Data(old.utf8))
+        XCTAssertEqual(decoded, SoundSettings(isEnabled: false, volume: .high, playsAlertSounds: false))
+        XCTAssertTrue(decoded.followsSystemFocus)
+        let roundTrip = try JSONDecoder().decode(SoundSettings.self, from: JSONEncoder().encode(ignoresFocus))
+        XCTAssertEqual(roundTrip, ignoresFocus)
+    }
+
     func testThrottlesSameCue() {
         var gate = SoundGate(minimumInterval: 0.25)
         let settings = SoundSettings()

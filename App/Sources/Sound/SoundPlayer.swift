@@ -12,6 +12,8 @@ final class SoundPlayer {
     private static let settingsKey = "soundSettings"
 
     private(set) var settings: SoundSettings
+    /// macOS の集中モード（ROADMAP 5-7）。
+    let focus = FocusStatusReader()
     @ObservationIgnored private var gate = SoundGate()
     @ObservationIgnored private var players: [SoundCue: AVAudioPlayer] = [:]
 
@@ -24,12 +26,14 @@ final class SoundPlayer {
         }
     }
 
-    /// 設定とおやすみモードに従って鳴らす。
+    /// 設定とおやすみモード・集中モードに従って鳴らす。
     func play(_ cue: SoundCue) {
         guard gate.shouldPlay(
             cue,
             settings: settings,
             systemInterfaceSoundsEnabled: Self.systemInterfaceSoundsEnabled,
+            // 集中モードに合わせない設定なら読まない。
+            systemFocused: settings.followsSystemFocus && focus.isFocused,
             at: .now
         ) else { return }
         start(cue)
