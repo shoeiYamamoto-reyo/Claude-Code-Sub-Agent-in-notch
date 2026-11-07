@@ -44,6 +44,8 @@ targets:
         # メニューバー常駐（Dock とアプリ切り替えに出さない）
         LSUIElement: true
         NSHumanReadableCopyright: ""
+        # 集中モード中は音を止める（ROADMAP 5-7、INFocusStatusCenter）。
+        NSFocusStatusUsageDescription: "集中モード中に効果音を鳴らさないために、集中モードの状態を読みます。"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.notchagent.NotchAgent
